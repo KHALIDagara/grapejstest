@@ -1,36 +1,41 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <!-- ... -->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GrapesJS Studio SDK</title>
     <script src="https://unpkg.com/@grapesjs/studio-sdk/dist/index.umd.js"></script>
-    
-    <link rel="stylesheet" href="https://unpkg.com/@grapesjs/studio-sdk/dist/style.css"/>
+    <link rel="stylesheet" href="https://unpkg.com/@grapesjs/studio-sdk/dist/style.css" />
   </head>
   <body>
     <div id="studio-editor" style="height: 100dvh"></div>
     <script>
+      // Global variable to store the editor instance
+      let studioEditor = null;
+
+      // Initialize the Studio Editor
       GrapesJsStudioSDK.createStudioEditor({
         root: '#studio-editor',
-        licenseKey: 'e50c20f9bbf746e4a85e7bd9ebf0faa601ba3461f1864001a90319272a846cbf',
+        licenseKey: 'E50C20F9BBF746E4A85E7BD9EBF0FAA601BA3461F1864001A90319272A846CBF',
         theme: 'dark',
         project: {
           type: 'web'
         },
+        // Hook into the onReady event to capture the editor instance
+        onReady: (editor) => {
+          studioEditor = editor;
+          console.log('Editor is ready!');
+        },
         assets: {
           storageType: 'self',
-          // Provide a custom upload handler for assets
           onUpload: async ({ files }) => {
             const body = new FormData();
             for (const file of files) {
               body.append('files', file);
             }
             const response = await fetch('ASSETS_UPLOAD_URL', { method: 'POST', body });
-            const result = await response.json();
-            // The expected result should be an array of assets, eg.
-            // [{ src: 'ASSET_URL' }]
-            return result;
+            return await response.json();
           },
-          // Provide a custom handler for deleting assets
           onDelete: async ({ assets }) => {
             const body = JSON.stringify(assets);
             await fetch('ASSETS_DELETE_URL', { method: 'DELETE', body });
@@ -38,25 +43,43 @@
         },
         storage: {
           type: 'self',
-          // Provide a custom handler for saving the project data.
           onSave: async ({ project }) => {
-            throw new Error('Implement your "onSave"!');
+            // throw new Error('Implement your "onSave"!');
             const body = new FormData();
             body.append('project', JSON.stringify(project));
             await fetch('PROJECT_SAVE_URL', { method: 'POST', body });
           },
-          // Provide a custom handler for loading project data.
           onLoad: async () => {
-            throw new Error('Implement your "onLoad"!');
+            // throw new Error('Implement your "onLoad"!');
             const response = await fetch('PROJECT_LOAD_URL');
             const project = await response.json();
-            // The project JSON is expected to be returned inside an object.
             return { project };
           },
           autosaveChanges: 100,
           autosaveIntervalMs: 10000
         }
       });
+
+      /**
+       * Function to upload/set HTML content programmatically.
+       * This simulates the "Import Code" feature by replacing the canvas content.
+       * * @param {string} htmlContent - The HTML string to render in the editor.
+       */
+      function uploadHtmlContent(htmlContent) {
+        if (!studioEditor) {
+          console.error("The editor is not ready yet.");
+          return;
+        }
+
+        // setComponents parses the HTML string (including <style> tags) 
+        // and renders it as the project's main content.
+        studioEditor.setComponents(htmlContent);
+        
+        console.log("Content uploaded successfully.");
+      }
+
+      // Example usage:
+      // uploadHtmlContent('<div class="my-class"><h1>Hello World</h1></div><style>.my-class{color: red}</style>');
     </script>
   </body>
 </html>
