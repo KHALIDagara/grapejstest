@@ -184,7 +184,7 @@ export function useAI() {
         model: process.env.NEXT_PUBLIC_AI_MODEL || 'google/gemini-2.0-flash-exp:free',
         messages: [{ role: 'system', content: systemPrompt }, ...history],
         tools: AI_TOOLS,
-        tool_choice: "auto"
+        tool_choice: "required"
       };
 
       console.log("📤 [Client] Sending Payload:", JSON.stringify({
