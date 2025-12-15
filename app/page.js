@@ -5,103 +5,103 @@ import Editor from '@/components/Editor';
 import { useAI } from '@/hooks/useAI';
 
 export default function Home() {
-  const editorRef = useRef(null);
-  
-  // 1. Current Transient State
-  const [selectedElement, setSelectedElement] = useState(null); 
-  const [currentPage, setCurrentPage] = useState({ name: 'Home', id: 'page-1' });
-  
-  // 2. THE STORE (Dictionary of Pages)
-  const [pagesStore, setPagesStore] = useState({
-      'page-1': { 
-          messages: [{ role: 'bot', text: 'Hello! Editing Home Page.' }],
-          theme: { primaryColor: '#2563eb', secondaryColor: '#ffffff', fontFamily: 'Arial', borderRadius: '4px' } 
-      }
-  });
+    const editorRef = useRef(null);
 
-  const { isThinking, generateResponse } = useAI(); 
+    // 1. Current Transient State
+    const [selectedElement, setSelectedElement] = useState(null);
+    const [currentPage, setCurrentPage] = useState({ name: 'Home', id: 'page-1' });
 
-  // --- HELPER: Get Current Page Data ---
-  const getCurrentPageData = () => {
-      return pagesStore[currentPage.id] || { 
-          messages: [], 
-          theme: { primaryColor: '#000000', secondaryColor: '#ffffff' } 
-      };
-  };
+    // 2. THE STORE (Dictionary of Pages)
+    const [pagesStore, setPagesStore] = useState({
+        'page-1': {
+            messages: [{ role: 'assistant', text: 'Hello! Editing Home Page.' }],
+            theme: { primaryColor: '#2563eb', secondaryColor: '#ffffff', fontFamily: 'Arial', borderRadius: '4px' }
+        }
+    });
 
-  // --- 3. Handle Page Switch ---
-  const handlePageChange = (pageInfo) => {
-      if (pageInfo.id === currentPage.id) return;
-      console.log(`Switching Context: ${currentPage.name} -> ${pageInfo.name}`);
-      
-      setPagesStore(prev => {
-          if (!prev[pageInfo.id]) {
-              return {
-                  ...prev,
-                  [pageInfo.id]: {
-                      messages: [{ role: 'bot', text: `Switched to ${pageInfo.name}. Ready to edit.` }],
-                      theme: { primaryColor: '#000000', secondaryColor: '#ffffff' }
-                  }
-              };
-          }
-          return prev;
-      });
+    const { isThinking, generateResponse } = useAI();
 
-      setCurrentPage(pageInfo);
-      setSelectedElement(null);
-  };
+    // --- HELPER: Get Current Page Data ---
+    const getCurrentPageData = () => {
+        return pagesStore[currentPage.id] || {
+            messages: [],
+            theme: { primaryColor: '#000000', secondaryColor: '#ffffff' }
+        };
+    };
 
-  // --- 4. Handle Theme Updates ---
-  const handleThemeChange = (newTheme) => {
-      setPagesStore(prev => ({
-          ...prev,
-          [currentPage.id]: { ...prev[currentPage.id], theme: newTheme }
-      }));
-  };
+    // --- 3. Handle Page Switch ---
+    const handlePageChange = (pageInfo) => {
+        if (pageInfo.id === currentPage.id) return;
+        console.log(`Switching Context: ${currentPage.name} -> ${pageInfo.name}`);
 
-  // --- 5. Handle AI Logic ---
-  const handleSendMessage = async (text) => {
-      const currentData = getCurrentPageData();
-      const currentHistory = currentData.messages;
-      const currentTheme = currentData.theme;
+        setPagesStore(prev => {
+            if (!prev[pageInfo.id]) {
+                return {
+                    ...prev,
+                    [pageInfo.id]: {
+                        messages: [{ role: 'assistant', text: `Switched to ${pageInfo.name}. Ready to edit.` }],
+                        theme: { primaryColor: '#000000', secondaryColor: '#ffffff' }
+                    }
+                };
+            }
+            return prev;
+        });
 
-      const userMsg = { role: 'user', text };
-      const placeholderBotMsg = { role: 'bot', text: '' };
+        setCurrentPage(pageInfo);
+        setSelectedElement(null);
+    };
 
-      setPagesStore(prev => ({
-          ...prev,
-          [currentPage.id]: {
-              ...prev[currentPage.id],
-              messages: [...currentHistory, userMsg, placeholderBotMsg]
-          }
-      }));
+    // --- 4. Handle Theme Updates ---
+    const handleThemeChange = (newTheme) => {
+        setPagesStore(prev => ({
+            ...prev,
+            [currentPage.id]: { ...prev[currentPage.id], theme: newTheme }
+        }));
+    };
 
-      // Update the last message in chat as AI generates/finishes
-      const onStreamUpdate = (streamedText) => {
-          setPagesStore(prev => {
-             const pageData = prev[currentPage.id];
-             const msgs = [...pageData.messages];
-             msgs[msgs.length - 1] = { role: 'bot', text: streamedText };
-             return { ...prev, [currentPage.id]: { ...pageData, messages: msgs } };
-          });
-      };
+    // --- 5. Handle AI Logic ---
+    const handleSendMessage = async (text) => {
+        const currentData = getCurrentPageData();
+        const currentHistory = currentData.messages;
+        const currentTheme = currentData.theme;
 
-      const historyToSend = [...currentHistory, userMsg];
+        const userMsg = { role: 'user', text };
+        const placeholderBotMsg = { role: 'assistant', text: '' };
 
-      // --- FIX: Pass editorRef.current as first argument ---
-      await generateResponse(
-          editorRef.current, // <--- Editor Instance passed here!
-          text, 
-          historyToSend, 
-          selectedElement, 
-          onStreamUpdate, 
-          null // No completion callback needed, tools handle the DOM
-      );
-  };
+        setPagesStore(prev => ({
+            ...prev,
+            [currentPage.id]: {
+                ...prev[currentPage.id],
+                messages: [...currentHistory, userMsg, placeholderBotMsg]
+            }
+        }));
 
-  return (
-    <>
-      <style jsx global>{`
+        // Update the last message in chat as AI generates/finishes
+        const onStreamUpdate = (streamedText) => {
+            setPagesStore(prev => {
+                const pageData = prev[currentPage.id];
+                const msgs = [...pageData.messages];
+                msgs[msgs.length - 1] = { role: 'assistant', text: streamedText };
+                return { ...prev, [currentPage.id]: { ...pageData, messages: msgs } };
+            });
+        };
+
+        const historyToSend = [...currentHistory, userMsg];
+
+        // --- FIX: Pass editorRef.current as first argument ---
+        await generateResponse(
+            editorRef.current, // <--- Editor Instance passed here!
+            text,
+            historyToSend,
+            selectedElement,
+            onStreamUpdate,
+            null // No completion callback needed, tools handle the DOM
+        );
+    };
+
+    return (
+        <>
+            <style jsx global>{`
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -153,7 +153,7 @@ export default function Home() {
         .empty-state { text-align: center; color: #666; font-size: 13px; margin-top: 40px; }
         .msg { padding: 10px 14px; border-radius: 8px; line-height: 1.5; font-size: 14px; max-width: 90%; }
         .msg.user { background: #2563eb; align-self: flex-end; }
-        .msg.bot { background: #333; align-self: flex-start; }
+        .msg.assistant { background: #333; align-self: flex-start; }
         
         .input-section { padding: 15px; border-top: 1px solid #333; display: flex; flex-direction: column; gap: 10px; }
         .context-badge { background: #7b1fa2; color: white; padding: 6px 10px; border-radius: 4px; font-size: 11px; }
@@ -167,23 +167,23 @@ export default function Home() {
         #studio-editor { width: 100%; height: 100%; }
       `}</style>
 
-      <div className="main-layout">
-        <Sidebar 
-          messages={getCurrentPageData().messages} 
-          currentTheme={getCurrentPageData().theme}
-          onThemeChange={handleThemeChange}
-          currentPage={currentPage}
-          selectedContext={selectedElement}
-          onClearContext={() => setSelectedElement(null)} 
-          isThinking={isThinking} 
-          onSend={handleSendMessage} 
-        />
-        <Editor 
-          onReady={(editor) => { editorRef.current = editor; }} 
-          onSelection={setSelectedElement}
-          onPageChange={handlePageChange} 
-        />
-      </div>
-    </>
-  );
+            <div className="main-layout">
+                <Sidebar
+                    messages={getCurrentPageData().messages}
+                    currentTheme={getCurrentPageData().theme}
+                    onThemeChange={handleThemeChange}
+                    currentPage={currentPage}
+                    selectedContext={selectedElement}
+                    onClearContext={() => setSelectedElement(null)}
+                    isThinking={isThinking}
+                    onSend={handleSendMessage}
+                />
+                <Editor
+                    onReady={(editor) => { editorRef.current = editor; }}
+                    onSelection={setSelectedElement}
+                    onPageChange={handlePageChange}
+                />
+            </div>
+        </>
+    );
 }
