@@ -14,7 +14,6 @@ export function useAI() {
       { role: 'bot', text: 'New context active. How can I help?' }
     ]);
   };
-  // --------------------------------------
 
   const sendMessage = async (userText, selectedContext, onComplete) => {
     if (!userText.trim()) return;
@@ -31,16 +30,15 @@ export function useAI() {
       { role: 'bot', text: '' }
     ]);
 
-    // ... (System Prompt Logic) ...
+    // --- SYSTEM PROMPT ---
     let systemPrompt = '';
     
     if (selectedContext) {
-        // MODE A: EDITING SPECIFIC ELEMENT
         systemPrompt = `
            You are an expert web developer.
-           The user has selected a specific HTML component: <${selectedContext.tagName}>.
+           The user has selected: <${selectedContext.tagName}>.
            
-           CURRENT HTML OF SELECTION:
+           CURRENT HTML:
            \`\`\`html
            ${selectedContext.currentHTML}
            \`\`\`
@@ -48,21 +46,18 @@ export function useAI() {
            USER REQUEST: "${userText}"
 
            INSTRUCTIONS:
-           1. Return the **UPDATED HTML** for this component only.
-           2. Do NOT wrap it in <html> or <body>.
-           3. Use **Inline CSS** (style="...") for all styling.
-           4. Do NOT use classes.
-           5. Output ONLY the code. No markdown.
+           1. Return ONLY the updated HTML for this component.
+           2. **Use Inline CSS** (style="...") for all styling. 
+           3. Do NOT use classes.
+           4. Do NOT output markdown.
         `;
     } else {
-        // MODE B: GLOBAL GENERATION
         systemPrompt = `
            You are an expert GrapesJS developer.
            1. Output ONLY valid HTML. No Markdown backticks.
-           2. No <html>/<body> tags. Start with <section>/<div>.
-           3. Add 'data-gjs-name="Layer Name"' to major elements.
-           4. Use **Inline CSS** (style="...") for all styling.
-           5. Do NOT use classes.
+           2. Start directly with <section>/<div>.
+           3. **Use Inline CSS** (style="...") for all styling.
+           4. Do NOT use classes.
         `;
     }
 

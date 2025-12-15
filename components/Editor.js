@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react';
 import Script from 'next/script';
 
-// Add onPageChange prop
 export default function Editor({ onReady, onSelection, onPageChange }) { 
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -25,7 +24,7 @@ export default function Editor({ onReady, onSelection, onPageChange }) {
                 setIsLoaded(true);
                 window.studioEditor = editor; 
 
-                // --- 1. SELECTION LISTENER ---
+                // 1. SELECTION LISTENER
                 editor.on('component:selected', (model) => {
                     if (!model) return;
                     const elData = {
@@ -36,12 +35,12 @@ export default function Editor({ onReady, onSelection, onPageChange }) {
                     if (onSelection) onSelection(elData);
                 });
 
-                // --- 2. DESELECTION LISTENER ---
+                // 2. DESELECTION LISTENER
                 editor.on('component:deselected', () => {
                     if (onSelection) onSelection(null);
                 });
 
-                // --- 3. PAGE SWITCH LISTENER ---
+                // 3. PAGE CHANGE LISTENER (New)
                 editor.on('page:select', () => {
                     if (onPageChange) onPageChange();
                 });
