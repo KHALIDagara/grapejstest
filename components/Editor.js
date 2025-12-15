@@ -1,7 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Script from 'next/script';
-import grapesjsTailwind from 'grapesjs-tailwind';
 
 export default function Editor({ onReady, onSelection }) { 
   const [isLoaded, setIsLoaded] = useState(false);
@@ -21,58 +20,25 @@ export default function Editor({ onReady, onSelection }) {
               project: { type: 'web' },
               assets: { storageType: 'self' },
               
-              plugins: [
-                {
-                  id: 'grapesjs-tailwind',
-                  src: grapesjsTailwind,
-                  options: { suggestClasses: true }
-                }
-              ],
+              // NO PLUGINS NEEDED FOR STANDARD CSS
 
               onReady: (editor) => {
                 setIsLoaded(true);
                 window.studioEditor = editor; 
 
-                // --- 1. FORCE INJECT TAILWIND ---
-                const frameEl = editor.Canvas.getFrameEl();
-                
-                // Helper to load script
-                const injectScript = () => {
-                    const frameDoc = frameEl.contentWindow?.document;
-                    if (!frameDoc) return;
-
-                    // Prevent duplicate loading
-                    if (frameDoc.getElementById('tailwind-script')) return;
-
-                    const script = frameDoc.createElement('script');
-                    script.id = 'tailwind-script';
-                    script.src = "https://cdn.tailwindcss.com";
-                    
-                    script.onload = () => {
-                        // Disable Preflight to prevent layout shifts
-                        const config = frameDoc.createElement('script');
-                        config.innerHTML = `tailwind.config = { corePlugins: { preflight: false } }`;
-                        frameDoc.head.appendChild(config);
-                        console.log("✅ Tailwind injected successfully!");
-                    };
-                    frameDoc.head.appendChild(script);
-                };
-
-                // Try immediately, and also listen for frame load (rendering changes)
-                injectScript();
-                editor.on('load', injectScript);
-                // --------------------------------
-
+                // --- 1. Selection Listener ---
                 editor.on('component:selected', (model) => {
                     if (!model) return;
                     const elData = {
                         id: model.cid,
                         tagName: model.get('tagName'),
+                        // We send the HTML. The AI will add style="..." attributes to it.
                         currentHTML: model.toHTML() 
                     };
                     if (onSelection) onSelection(elData);
                 });
 
+                // --- 2. Deselection Listener ---
                 editor.on('component:deselected', () => {
                     if (onSelection) onSelection(null);
                 });

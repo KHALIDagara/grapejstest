@@ -41,10 +41,12 @@ export function useAI() {
 
            INSTRUCTIONS:
            1. Return ONLY the updated HTML for this component.
-           2. Use **Tailwind CSS** classes.
-           3. IMPORTANT: If the user changes color, background, or size, use the '!' prefix to override existing styles (e.g., class="!bg-red-600 !text-white").
-           4. Do NOT output markdown.
-        `;  
+           2. **Use Inline CSS** (style="...") for all styling. 
+           3. Do NOT use classes (like Tailwind or Bootstrap).
+           4. Example: <button style="background-color: #dc2626; color: white; padding: 10px 20px; border-radius: 8px;">
+           5. Do NOT output markdown.
+        `;
+
           } else {
         // MODE B: GLOBAL GENERATION
         systemPrompt = `
@@ -53,6 +55,8 @@ export function useAI() {
            2. No <html>/<body> tags. Start with <section>/<div>.
            3. Add 'data-gjs-name="Layer Name"' to major elements.
            4. Use inline styles or <style> tags.
+           5. **Use Inline CSS** (style="...") for all styling.
+           6. Do NOT use classes.
         `;
     }
 
