@@ -1,147 +1,157 @@
 import { useState } from 'react';
 import DOMPurify from 'dompurify';
 
-export function useAI() {
+export function useAI(editor) { // Pass the GrapesJS editor instance
   const [isThinking, setIsThinking] = useState(false);
 
-  // --- HELPER: Fix & Sanitize HTML ---
-  const sanitizeHtml = (html) => {
-    try {
-      let clean = html.replace(/```html/g, '').replace(/```/g, '');
-      const sanitized = DOMPurify.sanitize(clean, {
-        USE_PROFILES: { html: true },
-        ADD_ATTR: ['style', 'target', 'id', 'class', 'href', 'src', 'alt', 'width', 'height'], 
-        ADD_TAGS: ['style', 'iframe', 'script', 'img', 'br', 'hr'], 
-        FORCE_BODY: true, 
-      });
-      return sanitized;
-    } catch (e) {
-      console.warn("DOMPurify failed, falling back to raw output", e);
-      return html;
+  // --- 1. CONTEXT GATHERER ---
+  // Grabs the "Vibe" of the page without sending 5000 lines of code
+  const getPageContext = () => {
+    if (!editor) return "No context available.";
+    
+    // Get all text on the page to understand the "Topic" (Yoga, Coffee, Tech?)
+    const pageText = editor.Canvas.getBody().innerText.slice(0, 1000); 
+    
+    // Get a structural map (Simple DOM tree)
+    const wrapper = editor.getWrapper();
+    const structure = wrapper.find('section').map(comp => comp.get('tagName') + (comp.getId() ? `#${comp.getId()}` : '')).join(' > ');
+
+    return `Page Topic: ${pageText.replace(/\n/g, ' ')}\nPage Structure: ${structure}`;
+  };
+
+  // --- 2. EXECUTION ENGINE ---
+  // Applies the JSON instructions deterministically
+  const executeCommand = (command, selectedComponent) => {
+    console.log("AI Command:", command);
+
+    switch (command.action) {
+      case 'STYLE':
+        // Strict Mode: Apply styles directly to the component model
+        // This guarantees NO HTML wrappers are added
+        selectedComponent.addStyle(command.payload);
+        break;
+
+      case 'UPDATE_CONTENT':
+        // Updates the INNER content (e.g., changing text inside a div)
+        // Keeps the parent wrapper intact
+        const cleanHtml = DOMPurify.sanitize(command.payload, { FORCE_BODY: true });
+        selectedComponent.components(cleanHtml); 
+        break;
+
+      case 'INSERT':
+        // Appends a new component inside the selected one
+        const cleanComponent = DOMPurify.sanitize(command.payload, { FORCE_BODY: true });
+        selectedComponent.append(cleanComponent);
+        break;
+        
+      default:
+        console.warn("Unknown AI Action");
     }
   };
 
-  const generateResponse = async (userText, history, selectedContext, pageTheme, onStreamUpdate, onComplete) => {
+  const generateResponse = async (userText, history, selectedContext, pageTheme, onComplete) => {
     if (!userText.trim()) return;
-
     setIsThinking(true);
 
-    // --- 1. CONSTRUCT SYSTEM PROMPT ---
+    // Get the selected component from GrapesJS directly if possible
+    const selectedComponent = editor.getSelected();
     
-    const syntaxRules = `
-      CRITICAL SYNTAX RULES:
-      1. ATTRIBUTES: Close all attributes with double quotes (style="...").
-      2. VOID TAGS: Self-close void tags (<img />, <br />).
-      3. CLEAN OUTPUT: Raw HTML only. No Markdown.
-    `;
-
-    const themeContext = pageTheme ? `
-      PAGE THEME:
-      - Primary: ${pageTheme.primaryColor || 'Default'}
-      - Font: ${pageTheme.fontFamily || 'Default'}
-      - Radius: ${pageTheme.borderRadius || '0px'}
-    ` : '';
-
-    let systemPrompt = '';
-
-    if (selectedContext) {
-        // --- THE FIX: STRICT SCOPE ENFORCEMENT ---
-        // We inject the tagName and force the AI to respect it.
-        const tag = selectedContext.tagName.toLowerCase(); // e.g., 'button', 'img', 'div'
-        
-        systemPrompt = `
-           You are an expert web developer refining a SINGLE existing component.
-           ${syntaxRules}
-           ${themeContext}
-           
-           CONTEXT:
-           User selected element: <${tag.toUpperCase()}>
-           Current HTML:
-           \`\`\`html
-           ${selectedContext.currentHTML}
-           \`\`\`
-           
-           USER REQUEST: "${userText}"
-           
-           CRITICAL RULES FOR REFINEMENT:
-           1. KEEP THE ROOT TAG: You must return a <${tag}> ... </${tag}>. 
-           2. NO WRAPPERS: Do NOT wrap the element in a container (div, section).
-           3. NO SIBLINGS: Do NOT add extra elements outside the root tag.
-           4. ONLY UPDATE STYLES/CONTENT: Modify the inline styles and internal text only.
-           
-           Example:
-           If selected is <button>, output must be <button style="...">...</button>
-           Do NOT output <div...><button...></button></div>
-        `;
-    } else {
-        // New Component Prompt
-        systemPrompt = `
-           You are an expert GrapesJS component generator.
-           ${syntaxRules}
-           ${themeContext}
-           
-           USER REQUEST: "${userText}"
-           
-           INSTRUCTIONS:
-           1. Create a responsive, beautiful HTML structure.
-           2. Start strictly with a <div style="..."> wrapper.
-           3. Use Inline CSS (style="...") for all styling.
-        `;
+    if (!selectedComponent) {
+      setIsThinking(false);
+      return;
     }
 
-    // --- 2. PREPARE MESSAGES ---
-    const apiMessages = history.map(msg => ({
-        role: msg.role === 'bot' ? 'assistant' : msg.role,
-        content: msg.text || msg.content
-    }));
+    // Calculate DOM Path (e.g. Body > Section > Div > Button)
+    let domPath = [];
+    let curr = selectedComponent;
+    while(curr && curr !== editor.getWrapper()) {
+        domPath.unshift(curr.get('tagName'));
+        curr = curr.parent();
+    }
+    const pathString = domPath.join(' > ');
+
+    // --- 3. THE SMART PROMPT ---
+    const systemPrompt = `
+      ROLE: You are a JSON-based Web Builder Engine.
+      
+      GLOBAL PAGE CONTEXT:
+      "${getPageContext()}"
+
+      CURRENT SELECTION:
+      - Type: <${selectedContext.tagName}>
+      - Location in Page: ${pathString}
+      - Current HTML Content: 
+        \`\`\`html
+        ${selectedContext.currentHTML}
+        \`\`\`
+
+      USER INSTRUCTION: "${userText}"
+
+      LOGIC RULES:
+      1. If the user wants to change colors, fonts, spacing, or alignment -> Use action "STYLE".
+      2. If the user wants to change the text or replace inner elements -> Use action "UPDATE_CONTENT".
+      3. If the user wants to add a NEW element inside this one -> Use action "INSERT".
+
+      RESPONSE FORMAT (STRICT JSON ONLY):
+      
+      If Action is STYLE:
+      {
+        "action": "STYLE",
+        "payload": { "background-color": "#ff0000", "border-radius": "10px", ... }
+      }
+
+      If Action is UPDATE_CONTENT (Refining what is inside):
+      {
+        "action": "UPDATE_CONTENT",
+        "payload": "<h2 style='...'>New Title</h2><p>New text</p>" 
+      }
+      (NOTE: Do NOT include the root tag <${selectedContext.tagName}> in the payload, only what goes INSIDE it.)
+
+      If Action is INSERT (Adding new child):
+      {
+        "action": "INSERT",
+        "payload": "<button style='...'>Click Me</button>"
+      }
+
+      CRITICAL: return ONLY valid JSON. No markdown. No text.
+    `;
 
     try {
+      // (Using non-streaming request for JSON reliability)
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: process.env.NEXT_PUBLIC_AI_MODEL || 'google/gemini-2.0-flash-exp:free',
-          messages: [{ role: 'system', content: systemPrompt }, ...apiMessages]
+          model: 'google/gemini-2.0-flash-exp:free', // Flash models are great for JSON
+          messages: [
+              { role: 'system', content: systemPrompt }
+              // (History is less relevant for "Commands", but you can add it if needed)
+          ]
         })
       });
 
-      if (!response.ok) throw new Error('Network error');
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullText = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
-        
-        for (const line of lines) {
-          if (line.trim().startsWith("data: ")) {
-            const jsonStr = line.replace("data: ", "").trim();
-            if (jsonStr === "[DONE]") break;
-            try {
-              const json = JSON.parse(jsonStr);
-              const content = json.choices[0]?.delta?.content || "";
-              if (content) {
-                fullText += content;
-                if (onStreamUpdate) onStreamUpdate(fullText);
-              }
-            } catch (e) {}
-          }
-        }
+      const data = await response.json(); // Assuming your API returns the full JSON object now
+      
+      // Parse the AI's "Thought"
+      let aiCommand;
+      try {
+          // Sometimes LLMs wrap JSON in ```json blocks
+          const rawJson = data.content.replace(/```json/g, '').replace(/```/g, '').trim();
+          aiCommand = JSON.parse(rawJson);
+      } catch (e) {
+          console.error("AI returned invalid JSON", data.content);
+          return;
       }
 
-      setIsThinking(false);
+      // Execute the deterministic action
+      executeCommand(aiCommand, selectedComponent);
       
-      const finalHtml = sanitizeHtml(fullText);
-      if (onComplete) onComplete(finalHtml);
+      setIsThinking(false);
+      if (onComplete) onComplete("Done"); // Notify UI
 
     } catch (error) {
       console.error(error);
       setIsThinking(false);
-      if (onStreamUpdate) onStreamUpdate("Error: " + error.message);
     }
   };
 
