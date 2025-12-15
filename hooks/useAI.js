@@ -197,26 +197,44 @@ export function useAI() {
         throw new Error(`API Error: ${response.statusText} - ${errText}`);
       }
 
+      console.log(`📥 [Client] Response Status: ${response.status} ${response.statusText}`);
+
       const data = await response.json();
+      console.log("📥 [Client] Response Data:", JSON.stringify({
+        id: data.id,
+        model: data.model,
+        usage: data.usage,
+        choicesCount: data.choices?.length,
+        finishReason: data.choices?.[0]?.finish_reason,
+        hasToolCalls: !!data.choices?.[0]?.message?.tool_calls,
+        hasContent: !!data.choices?.[0]?.message?.content
+      }, null, 2));
+
       const choice = data.choices[0];
       const message = choice.message;
 
       let finalUserMessage = "";
 
       if (message.tool_calls && message.tool_calls.length > 0) {
+        console.log(`🔧 [Client] Processing ${message.tool_calls.length} tool call(s)`);
         for (const toolCall of message.tool_calls) {
           const fnName = toolCall.function.name;
           let fnArgs = {};
-          try { fnArgs = JSON.parse(toolCall.function.arguments); } catch (e) { }
+          try { fnArgs = JSON.parse(toolCall.function.arguments); } catch (e) {
+            console.error("❌ [Client] Failed to parse tool arguments:", toolCall.function.arguments);
+          }
 
           // Pass 'editor' to executeTool for page-level ops
           const result = executeTool(fnName, fnArgs, selectedModel, editor);
+          console.log(`✅ [Client] Tool '${fnName}' result: ${result}`);
           finalUserMessage += result + " ";
         }
       }
       else if (message.content) {
+        console.log("💬 [Client] LLM returned text content (no tool call)");
         finalUserMessage = message.content;
       } else {
+        console.log("⚠️ [Client] LLM returned empty response");
         finalUserMessage = "Done.";
       }
 
