@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react';
 import Script from 'next/script';
 
-export default function Editor({ onReady, onSelection }) { 
+// Add onPageChange prop
+export default function Editor({ onReady, onSelection, onPageChange }) { 
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -20,27 +21,29 @@ export default function Editor({ onReady, onSelection }) {
               project: { type: 'web' },
               assets: { storageType: 'self' },
               
-              // NO PLUGINS NEEDED FOR STANDARD CSS
-
               onReady: (editor) => {
                 setIsLoaded(true);
                 window.studioEditor = editor; 
 
-                // --- 1. Selection Listener ---
+                // --- 1. SELECTION LISTENER ---
                 editor.on('component:selected', (model) => {
                     if (!model) return;
                     const elData = {
                         id: model.cid,
                         tagName: model.get('tagName'),
-                        // We send the HTML. The AI will add style="..." attributes to it.
                         currentHTML: model.toHTML() 
                     };
                     if (onSelection) onSelection(elData);
                 });
 
-                // --- 2. Deselection Listener ---
+                // --- 2. DESELECTION LISTENER ---
                 editor.on('component:deselected', () => {
                     if (onSelection) onSelection(null);
+                });
+
+                // --- 3. PAGE SWITCH LISTENER ---
+                editor.on('page:select', () => {
+                    if (onPageChange) onPageChange();
                 });
 
                 if (onReady) onReady(editor);
@@ -50,7 +53,7 @@ export default function Editor({ onReady, onSelection }) {
       }
     }, 100);
     return () => clearInterval(interval);
-  }, [onReady, onSelection]);
+  }, [onReady, onSelection, onPageChange]);
 
   return (
     <>

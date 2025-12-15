@@ -7,7 +7,15 @@ export function useAI() {
   const [isThinking, setIsThinking] = useState(false);
   const historyRef = useRef([]);
 
-  // Added `selectedContext` argument
+  // --- NEW: Function to clear history ---
+  const resetHistory = () => {
+    historyRef.current = [];
+    setMessages([
+      { role: 'bot', text: 'New context active. How can I help?' }
+    ]);
+  };
+  // --------------------------------------
+
   const sendMessage = async (userText, selectedContext, onComplete) => {
     if (!userText.trim()) return;
 
@@ -23,16 +31,16 @@ export function useAI() {
       { role: 'bot', text: '' }
     ]);
 
-    // --- DYNAMIC SYSTEM PROMPT ---
+    // ... (System Prompt Logic) ...
     let systemPrompt = '';
     
     if (selectedContext) {
         // MODE A: EDITING SPECIFIC ELEMENT
         systemPrompt = `
            You are an expert web developer.
-           The user has selected: <${selectedContext.tagName}>.
+           The user has selected a specific HTML component: <${selectedContext.tagName}>.
            
-           CURRENT HTML:
+           CURRENT HTML OF SELECTION:
            \`\`\`html
            ${selectedContext.currentHTML}
            \`\`\`
@@ -40,23 +48,21 @@ export function useAI() {
            USER REQUEST: "${userText}"
 
            INSTRUCTIONS:
-           1. Return ONLY the updated HTML for this component.
-           2. **Use Inline CSS** (style="...") for all styling. 
-           3. Do NOT use classes (like Tailwind or Bootstrap).
-           4. Example: <button style="background-color: #dc2626; color: white; padding: 10px 20px; border-radius: 8px;">
-           5. Do NOT output markdown.
+           1. Return the **UPDATED HTML** for this component only.
+           2. Do NOT wrap it in <html> or <body>.
+           3. Use **Inline CSS** (style="...") for all styling.
+           4. Do NOT use classes.
+           5. Output ONLY the code. No markdown.
         `;
-
-          } else {
+    } else {
         // MODE B: GLOBAL GENERATION
         systemPrompt = `
            You are an expert GrapesJS developer.
            1. Output ONLY valid HTML. No Markdown backticks.
            2. No <html>/<body> tags. Start with <section>/<div>.
            3. Add 'data-gjs-name="Layer Name"' to major elements.
-           4. Use inline styles or <style> tags.
-           5. **Use Inline CSS** (style="...") for all styling.
-           6. Do NOT use classes.
+           4. Use **Inline CSS** (style="...") for all styling.
+           5. Do NOT use classes.
         `;
     }
 
@@ -114,5 +120,5 @@ export function useAI() {
     }
   };
 
-  return { messages, isThinking, sendMessage };
+  return { messages, isThinking, sendMessage, resetHistory };
 }
