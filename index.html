@@ -3,83 +3,129 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GrapesJS Studio SDK</title>
+    <title>GrapesJS Studio SDK with AI Pane</title>
     <script src="https://unpkg.com/@grapesjs/studio-sdk/dist/index.umd.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/@grapesjs/studio-sdk/dist/style.css" />
+    
+    <style>
+      .ai-chat-container { display: flex; flex-direction: column; height: 100%; padding: 10px; box-sizing: border-box; }
+      .ai-messages { flex: 1; overflow-y: auto; border: 1px solid #444; margin-bottom: 10px; padding: 10px; border-radius: 4px; background: #1e1e1e; color: #ddd; }
+      .ai-input-group { display: flex; gap: 5px; }
+      .ai-input { flex: 1; padding: 8px; border-radius: 4px; border: 1px solid #444; background: #2a2a2a; color: white; }
+      .ai-btn { padding: 8px 12px; border-radius: 4px; border: none; background: #9c27b0; color: white; cursor: pointer; }
+      .ai-btn:hover { background: #7b1fa2; }
+      .msg { margin-bottom: 8px; font-size: 0.9em; }
+      .msg.user { text-align: right; color: #a5d6a7; }
+      .msg.bot { text-align: left; color: #90caf9; }
+    </style>
   </head>
   <body>
     <div id="studio-editor" style="height: 100dvh"></div>
     <script>
-      // Global variable to store the editor instance
       let studioEditor = null;
 
-      // Initialize the Studio Editor
+      // 1. Define a function that returns your Chatbot DOM element
+      function createChatbotUI() {
+        const container = document.createElement('div');
+        container.className = 'ai-chat-container';
+        
+        container.innerHTML = `
+          <div class="ai-messages" id="ai-messages">
+            <div class="msg bot">Hello! I am your AI assistant. How can I help you build this page?</div>
+          </div>
+          <div class="ai-input-group">
+            <input type="text" class="ai-input" id="ai-input" placeholder="Ask AI..." />
+            <button class="ai-btn" id="ai-send">Send</button>
+          </div>
+        `;
+
+        // Add simple functionality
+        const btn = container.querySelector('#ai-send');
+        const input = container.querySelector('#ai-input');
+        const msgArea = container.querySelector('#ai-messages');
+
+        btn.onclick = () => {
+          const text = input.value;
+          if(!text) return;
+          
+          // 1. Show User Message
+          msgArea.innerHTML += `<div class="msg user">${text}</div>`;
+          input.value = '';
+
+          // 2. Simulate AI Response (Connect your API here)
+          setTimeout(() => {
+            msgArea.innerHTML += `<div class="msg bot">I heard you say: "${text}". (Connect OpenAI here!)</div>`;
+            msgArea.scrollTop = msgArea.scrollHeight; // Auto scroll to bottom
+          }, 1000);
+        };
+
+        return container;
+      }
+
+      // 2. Initialize Editor with Custom Layout
       GrapesJsStudioSDK.createStudioEditor({
         root: '#studio-editor',
         licenseKey: 'e50c20f9bbf746e4a85e7bd9ebf0faa601ba3461f1864001a90319272a846cbf',
         theme: 'dark',
-        project: {
-          type: 'web'
+        project: { type: 'web' },
+        
+        // --- THIS IS THE KEY PART ---
+        layout: {
+          type: 'row', // Main container is a row
+          style: { height: '100%' },
+          children: [
+            // LEFT SIDEBAR (Where we add the tabs)
+            {
+              type: 'sidebarLeft',
+              children: {
+                type: 'tabs',
+                value: 'pages', // Default selected tab
+                tabs: [
+                  // Tab 1: Standard Pages Panel
+                  {
+                    id: 'pages',
+                    label: 'Pages',
+                    children: { type: 'panelPages', style: { height: '100%' } }
+                  },
+                  // Tab 2: Standard Layers Panel
+                  {
+                    id: 'layers',
+                    label: 'Layers',
+                    children: { type: 'panelLayers', style: { height: '100%' } }
+                  },
+                  // Tab 3: YOUR NEW AI PANE
+                  {
+                    id: 'ai-chat',
+                    label: 'AI Assistant', // Title on the tab
+                    children: {
+                      type: 'custom', 
+                      render: () => createChatbotUI(), // Render your custom DOM
+                      style: { height: '100%' }
+                    }
+                  }
+                ]
+              }
+            },
+            
+            // CENTER: Top Bar + Canvas
+            {
+              type: 'canvasSidebarTop',
+              sidebarTop: {
+                leftContainer: { buttons: [] } // Standard top bar buttons
+              }
+            },
+            
+            // RIGHT SIDEBAR (Styles, Properties, etc.)
+            { type: 'sidebarRight' }
+          ]
         },
-        // Hook into the onReady event to capture the editor instance
+        // -----------------------------
+
         onReady: (editor) => {
           studioEditor = editor;
-          console.log('Editor is ready!');
-        },
-        assets: {
-          storageType: 'self',
-          onUpload: async ({ files }) => {
-            const body = new FormData();
-            for (const file of files) {
-              body.append('files', file);
-            }
-            const response = await fetch('ASSETS_UPLOAD_URL', { method: 'POST', body });
-            return await response.json();
-          },
-          onDelete: async ({ assets }) => {
-            const body = JSON.stringify(assets);
-            await fetch('ASSETS_DELETE_URL', { method: 'DELETE', body });
-          }
-        },
-        storage: {
-          type: 'self',
-          onSave: async ({ project }) => {
-            // throw new Error('Implement your "onSave"!');
-            const body = new FormData();
-            body.append('project', JSON.stringify(project));
-            await fetch('PROJECT_SAVE_URL', { method: 'POST', body });
-          },
-          onLoad: async () => {
-            // throw new Error('Implement your "onLoad"!');
-            const response = await fetch('PROJECT_LOAD_URL');
-            const project = await response.json();
-            return { project };
-          },
-          autosaveChanges: 100,
-          autosaveIntervalMs: 10000
+          console.log('Editor ready');
         }
       });
-
-      /**
-       * Function to upload/set HTML content programmatically.
-       * This simulates the "Import Code" feature by replacing the canvas content.
-       * * @param {string} htmlContent - The HTML string to render in the editor.
-       */
-      function uploadHtmlContent(htmlContent) {
-        if (!studioEditor) {
-          console.error("The editor is not ready yet.");
-          return;
-        }
-
-        // setComponents parses the HTML string (including <style> tags) 
-        // and renders it as the project's main content.
-        studioEditor.setComponents(htmlContent);
-        
-        console.log("Content uploaded successfully.");
-      }
-
-      // Example usage:
-      // uploadHtmlContent('<div class="my-class"><h1>Hello World</h1></div><style>.my-class{color: red}</style>');
     </script>
   </body>
 </html>
