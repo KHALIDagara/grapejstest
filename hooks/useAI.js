@@ -1,20 +1,30 @@
 import { useState } from 'react';
+import DOMPurify from 'dompurify';
 
 export function useAI() {
   const [isThinking, setIsThinking] = useState(false);
 
-  // Helper: Use the browser to fix malformed HTML (unclosed tags, etc.)
+  // --- HELPER: Fix & Sanitize HTML using DOMPurify ---
+  // This is the core fix for the "swallowed component" issue.
+  // It forces unclosed attributes to close and ensures safe HTML.
   const sanitizeHtml = (html) => {
     try {
-      // 1. Strip Markdown code blocks if the AI adds them
+      // 1. Strip Markdown code blocks (AI often adds these despite instructions)
       let clean = html.replace(/```html/g, '').replace(/```/g, '');
-      
-      // 2. Browser Native Parser to fix unclosed tags
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(clean, 'text/html');
-      return doc.body.innerHTML;
+
+      // 2. Sanitize and Fix HTML
+      // - FORCE_BODY: true treats input as a fragment (like a div), not a full document
+      // - ADD_ATTR: ['style']: Crucial to keep the inline CSS GrapesJS needs
+      const sanitized = DOMPurify.sanitize(clean, {
+        USE_PROFILES: { html: true },    // Only allow HTML
+        ADD_ATTR: ['style', 'target', 'id', 'class', 'href', 'src', 'alt', 'width', 'height'], 
+        ADD_TAGS: ['style', 'iframe', 'script', 'img', 'br', 'hr'], 
+        FORCE_BODY: true, 
+      });
+
+      return sanitized;
     } catch (e) {
-      console.warn("HTML Sanitization failed, using raw output", e);
+      console.warn("DOMPurify failed, falling back to raw output", e);
       return html;
     }
   };
@@ -26,7 +36,7 @@ export function useAI() {
 
     // --- 1. CONSTRUCT SYSTEM PROMPT ---
     
-    // STRICT SYNTAX RULES (Crucial for GrapesJS)
+    // STRICT SYNTAX RULES (Reinforced instruction for the AI)
     const syntaxRules = `
       CRITICAL SYNTAX RULES:
       1. ATTRIBUTES: You MUST close all attributes with double quotes. 
@@ -48,7 +58,7 @@ export function useAI() {
     let systemPrompt = '';
 
     if (selectedContext) {
-        // Context-Aware Prompt
+        // Context-Aware Prompt (Refining existing element)
         systemPrompt = `
            You are an expert web developer refining a specific component.
            ${syntaxRules}
@@ -69,7 +79,7 @@ export function useAI() {
            3. Do not use external classes.
         `;
     } else {
-        // New Component Prompt
+        // New Component Prompt (Creating from scratch)
         systemPrompt = `
            You are an expert GrapesJS component generator.
            ${syntaxRules}
@@ -121,7 +131,7 @@ export function useAI() {
               const content = json.choices[0]?.delta?.content || "";
               if (content) {
                 fullText += content;
-                // Live stream update (Raw text for typing effect)
+                // Live stream update (Sends raw text for the "Thinking..." typing effect)
                 if (onStreamUpdate) onStreamUpdate(fullText);
               }
             } catch (e) {}
@@ -131,8 +141,10 @@ export function useAI() {
 
       setIsThinking(false);
       
-      // FINAL STEP: Sanitize before sending to GrapesJS
-      // This fixes the specific error where the browser "swallows" tags due to unclosed quotes
+      // --- 3. FINAL SANITIZATION (THE FIX) ---
+      // We run the completed string through DOMPurify.
+      // This will detect the missing quote in style="... and close it,
+      // preventing the browser from swallowing the next tag.
       const finalHtml = sanitizeHtml(fullText);
       
       if (onComplete) onComplete(finalHtml);
