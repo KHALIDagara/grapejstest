@@ -1,60 +1,51 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 
 export function useAI() {
-  const [messages, setMessages] = useState([
-    { role: 'bot', text: 'Hello! Select an element to edit it, or type here to build new sections.' }
-  ]);
   const [isThinking, setIsThinking] = useState(false);
-  const historyRef = useRef([]);
 
-  // --- NEW: Function to clear history ---
-  const resetHistory = () => {
-    historyRef.current = [];
-    setMessages([
-      { role: 'bot', text: 'New context active. How can I help?' }
-    ]);
-  };
-
-  const sendMessage = async (userText, selectedContext, onComplete) => {
+  // We no longer manage 'messages' state here. 
+  // We accept the CURRENT history to send to the API.
+  const generateResponse = async (userText, history, selectedContext, pageTheme, onStreamUpdate, onComplete) => {
     if (!userText.trim()) return;
 
     setIsThinking(true);
-    
-    // UI Update
-    const newHistory = [...historyRef.current, { role: 'user', content: userText }];
-    historyRef.current = newHistory;
-    
-    setMessages(prev => [
-      ...prev, 
-      { role: 'user', text: userText },
-      { role: 'bot', text: '' }
-    ]);
 
-    // --- SYSTEM PROMPT ---
+    // --- CONSTRUCT SYSTEM PROMPT ---
     let systemPrompt = '';
     
+    // Inject Page Theme into the Prompt
+    const themeContext = pageTheme ? `
+      PAGE THEME SETTINGS (STRICT):
+      The user has defined these specific styles for this page:
+      - Primary Color: ${pageTheme.primaryColor || 'Default'}
+      - Secondary Color: ${pageTheme.secondaryColor || 'Default'}
+      - Font Family: ${pageTheme.fontFamily || 'Default'}
+      - Border Radius: ${pageTheme.borderRadius || '0px'}
+      
+      INSTRUCTION: Use these exact values in your inline CSS (e.g., style="color: ${pageTheme.primaryColor}").
+    ` : '';
+
     if (selectedContext) {
         systemPrompt = `
            You are an expert web developer.
            The user has selected: <${selectedContext.tagName}>.
-           
            CURRENT HTML:
            \`\`\`html
            ${selectedContext.currentHTML}
            \`\`\`
-
+           ${themeContext}
            USER REQUEST: "${userText}"
-
            INSTRUCTIONS:
-           1. Return ONLY the updated HTML for this component.
+           1. Return ONLY the updated HTML.
            2. **Use Inline CSS** (style="...") for all styling. 
            3. Do NOT use classes.
-           4. Do NOT output markdown.
         `;
     } else {
         systemPrompt = `
            You are an expert GrapesJS developer.
-           1. Output ONLY valid HTML. No Markdown backticks.
+           ${themeContext}
+           INSTRUCTIONS:
+           1. Output ONLY valid HTML.
            2. Start directly with <section>/<div>.
            3. **Use Inline CSS** (style="...") for all styling.
            4. Do NOT use classes.
@@ -67,7 +58,7 @@ export function useAI() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: process.env.NEXT_PUBLIC_AI_MODEL || 'google/gemini-2.0-flash-exp:free',
-          messages: [{ role: 'system', content: systemPrompt }, ...newHistory]
+          messages: [{ role: 'system', content: systemPrompt }, ...history]
         })
       });
 
@@ -91,29 +82,23 @@ export function useAI() {
               const content = json.choices[0]?.delta?.content || "";
               if (content) {
                 fullText += content;
-                setMessages(prev => {
-                   const updated = [...prev];
-                   updated[updated.length - 1].text = fullText;
-                   return updated;
-                });
+                // Call the parent to update the "Streaming" message
+                if (onStreamUpdate) onStreamUpdate(fullText);
               }
             } catch (e) {}
           }
         }
       }
 
-      historyRef.current.push({ role: 'assistant', content: fullText });
       setIsThinking(false);
-      
-      const cleanCode = fullText.replace(/```html/g, '').replace(/```/g, '').trim();
-      if (onComplete) onComplete(cleanCode);
+      if (onComplete) onComplete(fullText);
 
     } catch (error) {
       console.error(error);
       setIsThinking(false);
-      setMessages(prev => [...prev, { role: 'bot', text: "Error: " + error.message }]);
+      if (onStreamUpdate) onStreamUpdate("Error: " + error.message);
     }
   };
 
-  return { messages, isThinking, sendMessage, resetHistory };
+  return { isThinking, generateResponse };
 }

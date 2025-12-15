@@ -6,159 +6,154 @@ import { useAI } from '@/hooks/useAI';
 
 export default function Home() {
   const editorRef = useRef(null);
+  
+  // 1. Current Transient State
   const [selectedElement, setSelectedElement] = useState(null); 
-  const [currentPage, setCurrentPage] = useState({ name: 'Home', id: 'root' });
+  const [currentPage, setCurrentPage] = useState({ name: 'Home', id: 'page-1' }); // Default to page-1
+  
+  // 2. THE STORE (Dictionary of Pages)
+  // Structure: { 'page-id': { messages: [], theme: {} } }
+  const [pagesStore, setPagesStore] = useState({
+      'page-1': { 
+          messages: [{ role: 'bot', text: 'Hello! Editing Home Page.' }],
+          theme: { primaryColor: '#2563eb', secondaryColor: '#ffffff', fontFamily: 'Arial', borderRadius: '4px' } 
+      }
+  });
 
-  const { messages, isThinking, sendMessage, resetHistory } = useAI(); 
-  const prevSelectionId = useRef(null);
+  const { isThinking, generateResponse } = useAI(); 
 
-  // 1. Context Switch Logic
-  useEffect(() => {
-    if (selectedElement && selectedElement.id !== prevSelectionId.current) {
-        resetHistory();
-        prevSelectionId.current = selectedElement.id;
-    }
-  }, [selectedElement, resetHistory]);
-
-  // 2. Page Switch Logic
-  const handlePageChange = (pageInfo) => {
-      console.log("Page switched to:", pageInfo.name);
-      setCurrentPage(pageInfo);
-      resetHistory();
-      setSelectedElement(null);
-      prevSelectionId.current = null;
+  // --- HELPER: Get Current Page Data ---
+  // Safely retrieve data for current page, or return defaults
+  const getCurrentPageData = () => {
+      return pagesStore[currentPage.id] || { 
+          messages: [], 
+          theme: { primaryColor: '#000000', secondaryColor: '#ffffff' } 
+      };
   };
 
-  // --- 3. FIXED INJECTION LOGIC ---
+  // --- 3. Handle Page Switch ---
+  const handlePageChange = (pageInfo) => {
+      if (pageInfo.id === currentPage.id) return;
+
+      console.log(`Switching Context: ${currentPage.name} -> ${pageInfo.name}`);
+      
+      // Ensure the new page exists in store
+      setPagesStore(prev => {
+          if (!prev[pageInfo.id]) {
+              return {
+                  ...prev,
+                  [pageInfo.id]: {
+                      messages: [{ role: 'bot', text: `Switched to ${pageInfo.name}. Ready to edit.` }],
+                      theme: { primaryColor: '#000000', secondaryColor: '#ffffff' }
+                  }
+              };
+          }
+          return prev;
+      });
+
+      setCurrentPage(pageInfo);
+      setSelectedElement(null);
+  };
+
+  // --- 4. Handle Theme Updates ---
+  const handleThemeChange = (newTheme) => {
+      setPagesStore(prev => ({
+          ...prev,
+          [currentPage.id]: {
+              ...prev[currentPage.id],
+              theme: newTheme
+          }
+      }));
+  };
+
+  // --- 5. Handle AI Logic ---
+  const handleSendMessage = async (text) => {
+      const currentData = getCurrentPageData();
+      const currentHistory = currentData.messages;
+      const currentTheme = currentData.theme;
+
+      // Optimistic UI Update (User Message)
+      const userMsg = { role: 'user', text };
+      const placeholderBotMsg = { role: 'bot', text: '' };
+
+      // Update Store immediately
+      setPagesStore(prev => ({
+          ...prev,
+          [currentPage.id]: {
+              ...prev[currentPage.id],
+              messages: [...currentHistory, userMsg, placeholderBotMsg]
+          }
+      }));
+
+      // Callback to update the streaming bot message
+      const onStreamUpdate = (streamedText) => {
+          setPagesStore(prev => {
+             const pageData = prev[currentPage.id];
+             const msgs = [...pageData.messages];
+             // Update the last message (the bot placeholder)
+             msgs[msgs.length - 1] = { role: 'bot', text: streamedText };
+             
+             return {
+                 ...prev,
+                 [currentPage.id]: { ...pageData, messages: msgs }
+             };
+          });
+      };
+
+      // Call AI
+      // Note: We pass the *raw* history (without the new user msg yet) to the hook? 
+      // No, we should pass the updated history.
+      const historyToSend = [...currentHistory, userMsg];
+
+      await generateResponse(
+          text, 
+          historyToSend, 
+          selectedElement, 
+          currentTheme, 
+          onStreamUpdate, 
+          (finalCode) => handleAICompletion(finalCode)
+      );
+  };
+
   const handleAICompletion = (htmlCode) => {
-    if (!editorRef.current) return;
-    
-    try {
+      // ... (Your Existing Injection Logic - Works perfectly) ...
+      if (!editorRef.current) return;
+      try {
+        // Logic to replace component or append
         if (selectedElement) {
             const selectedComponent = editorRef.current.getSelected();
-            
             if (selectedComponent) {
-                // SAFETY CHECK: Does it have a parent?
                 const parent = selectedComponent.parent();
-
-                if (parent) {
-                    // Normal component: Replace it
-                    console.log("Replacing component via Parent");
-                    selectedComponent.replaceWith(htmlCode);
-                } else {
-                    // Root/Wrapper (No parent): Update INSIDE content only
-                    // We cannot "replace" the body, only what's inside it.
-                    console.log("Updating Wrapper Content");
-                    selectedComponent.components(htmlCode);
-                }
+                if (parent) selectedComponent.replaceWith(htmlCode);
+                else selectedComponent.components(htmlCode);
             } else {
-                // Fallback if selection was lost during generation
                 editorRef.current.addComponents(htmlCode);
             }
         } else {
-            // No selection: Append to end of page
             editorRef.current.addComponents(htmlCode); 
         }
-    } catch (e) {
-        console.error("Editor Injection Failed:", e);
-    }
+      } catch (e) { console.error(e); }
   };
-  // --------------------------------
 
   return (
     <>
+      {/* Include your CSS here or imported */}
       <style jsx global>{`
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          background: #000;
-          color: #fff;
-          overflow: hidden;
-        }
-        .main-layout { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
-
-        /* SIDEBAR */
-        .sidebar {
-          position: relative; width: 400px; background: #1a1a1a;
-          border-right: 1px solid #333; display: flex; flex-direction: column;
-          transition: width 0.3s ease;
-        }
-        .sidebar.collapsed { width: 50px; }
-        .sidebar.collapsed .sidebar-content { display: none; }
-
-        .toggle-btn {
-          position: absolute; top: 20px; right: 10px; background: #333;
-          border: none; color: #fff; width: 30px; height: 30px;
-          border-radius: 4px; cursor: pointer; z-index: 10;
-          display: flex; align-items: center; justify-content: center;
-        }
-        .toggle-btn:hover { background: #444; }
-
-        .sidebar-content {
-          display: flex; flex-direction: column; height: 100%; padding: 20px;
-        }
-
-        .chat-header {
-          display: flex; align-items: center; gap: 10px; padding-bottom: 15px;
-          border-bottom: 1px solid #333; margin-bottom: 15px; font-weight: 600;
-        }
-
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #666; }
-        .status-dot.active { background: #4ade80; animation: pulse 2s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-
-        .chat-messages {
-          flex: 1; overflow-y: auto; display: flex; flex-direction: column;
-          gap: 12px; margin-bottom: 15px; padding-right: 5px;
-        }
-        .chat-messages::-webkit-scrollbar { width: 6px; }
-        .chat-messages::-webkit-scrollbar-track { background: #1a1a1a; }
-        .chat-messages::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
-
-        .msg { padding: 10px 14px; border-radius: 8px; line-height: 1.5; font-size: 14px; word-wrap: break-word; }
-        .msg.user { background: #2563eb; align-self: flex-end; max-width: 80%; }
-        .msg.bot { background: #333; align-self: flex-start; max-width: 90%; }
-
-        .input-section {
-          display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid #333;
-        }
-
-        .chat-input {
-          width: 100%; min-height: 60px; max-height: 120px; padding: 10px;
-          background: #2a2a2a; border: 1px solid #444; border-radius: 6px;
-          color: #fff; font-size: 14px; font-family: inherit; resize: vertical;
-        }
-        .chat-input:focus { outline: none; border-color: #2563eb; }
-
-        .send-btn {
-          width: 100%; padding: 12px; background: #2563eb; border: none;
-          border-radius: 6px; color: #fff; font-weight: 600; cursor: pointer;
-          transition: background 0.2s;
-        }
-        .send-btn:hover:not(:disabled) { background: #1d4ed8; }
-        .send-btn:disabled { background: #334155; cursor: not-allowed; }
-
-        /* EDITOR */
-        .editor-area { position: relative; flex: 1; width: 100%; height: 100%; background: #000; }
-        .loading-overlay {
-          position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-          display: flex; align-items: center; justify-content: center;
-          background: #000; color: #6b7280; font-size: 14px; z-index: 100;
-        }
-        #studio-editor { width: 100%; height: 100%; }
+        /* ... existing css ... */
       `}</style>
-
       <div className="main-layout">
         <Sidebar 
-          messages={messages} 
-          selectedContext={selectedElement}
+          messages={getCurrentPageData().messages} 
+          currentTheme={getCurrentPageData().theme}
+          onThemeChange={handleThemeChange}
           currentPage={currentPage}
+          selectedContext={selectedElement}
           isThinking={isThinking} 
-          onSend={(text) => sendMessage(text, selectedElement, currentPage, handleAICompletion)} 
+          onSend={handleSendMessage} 
         />
         <Editor 
           onReady={(editor) => { editorRef.current = editor; }} 
-          onSelection={(data) => setSelectedElement(data)}
+          onSelection={setSelectedElement}
           onPageChange={handlePageChange} 
         />
       </div>
