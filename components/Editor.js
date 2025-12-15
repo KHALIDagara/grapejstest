@@ -22,19 +22,21 @@ export default function Editor({ onReady, onSelection }) {
                 setIsLoaded(true);
                 window.studioEditor = editor; 
 
-                // --- 1. SELECTION LISTENER ---
+                // --- 1. SELECTION LISTENER (FIXED) ---
                 editor.on('component:selected', (model) => {
+                    // Safety check
+                    if (!model) return;
+
                     const elData = {
-                        id: model.getCid(), // Internal GrapesJS ID
+                        // FIX: use .cid (property), not .getCid() (function)
+                        id: model.cid, 
                         tagName: model.get('tagName'),
-                        // We send the current HTML so the AI knows what to modify
                         currentHTML: model.toHTML() 
                     };
                     if (onSelection) onSelection(elData);
                 });
 
                 // --- 2. DESELECTION LISTENER ---
-                // Triggers when user clicks the empty canvas
                 editor.on('component:deselected', () => {
                     if (onSelection) onSelection(null);
                 });
