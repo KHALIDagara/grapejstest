@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 
-// Icons (Simple SVG placeholders)
+// Simple Icons
 const ChatIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>;
 const SettingsIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>;
 
@@ -20,7 +20,6 @@ export default function Sidebar({ messages, isThinking, onSend, selectedContext,
     setInput('');
   };
 
-  // Helper to update specific theme key safely
   const updateTheme = (key, value) => {
     if (onThemeChange && currentTheme) {
         onThemeChange({ ...currentTheme, [key]: value });
@@ -29,22 +28,22 @@ export default function Sidebar({ messages, isThinking, onSend, selectedContext,
 
   return (
     <div className="sidebar">
-      {/* HEADER WITH TABS */}
-      <div className="flex items-center justify-between p-4 border-b border-[#333] bg-[#252525]">
-        <div className="font-bold text-white text-sm">
+      {/* HEADER */}
+      <div className="sidebar-header">
+        <div className="page-title">
              {currentPage?.name || 'Unknown Page'}
         </div>
-        <div className="flex gap-2 bg-[#1a1a1a] p-1 rounded">
+        <div className="tab-buttons">
             <button 
                 onClick={() => setActiveTab('chat')}
-                className={`p-2 rounded hover:bg-[#333] ${activeTab === 'chat' ? 'bg-[#2563eb] text-white' : 'text-gray-400'}`}
+                className={`tab-btn ${activeTab === 'chat' ? 'active' : ''}`}
                 title="AI Chat"
             >
                 <ChatIcon />
             </button>
             <button 
                 onClick={() => setActiveTab('settings')}
-                className={`p-2 rounded hover:bg-[#333] ${activeTab === 'settings' ? 'bg-[#2563eb] text-white' : 'text-gray-400'}`}
+                className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
                 title="Page Settings"
             >
                 <SettingsIcon />
@@ -52,14 +51,14 @@ export default function Sidebar({ messages, isThinking, onSend, selectedContext,
         </div>
       </div>
 
-      <div className="sidebar-content" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <div className="sidebar-content-wrapper">
         
         {/* === TAB 1: CHAT === */}
         {activeTab === 'chat' && (
             <>
                 <div className="chat-messages">
                 {(!messages || messages.length === 0) && (
-                    <div className="text-gray-500 text-center mt-10 text-sm">
+                    <div className="empty-state">
                         Start chatting to edit <b>{currentPage?.name}</b>.
                     </div>
                 )}
@@ -73,7 +72,7 @@ export default function Sidebar({ messages, isThinking, onSend, selectedContext,
 
                 <div className="input-section">
                 {selectedContext && (
-                    <div className="bg-[#4a148c] text-white text-xs p-2 rounded mb-2 flex justify-between items-center">
+                    <div className="context-badge">
                         <span>EDITING: <b>&lt;{selectedContext.tagName.toUpperCase()}&gt;</b></span>
                     </div>
                 )}
@@ -91,52 +90,52 @@ export default function Sidebar({ messages, isThinking, onSend, selectedContext,
             </>
         )}
 
-        {/* === TAB 2: PAGE SETTINGS === */}
+        {/* === TAB 2: SETTINGS === */}
         {activeTab === 'settings' && currentTheme && (
-            <div className="p-4 flex flex-col gap-4 text-white overflow-y-auto">
-                <h3 className="text-sm font-bold text-gray-400 uppercase">Page Theme</h3>
-                <p className="text-xs text-gray-500">These settings apply ONLY to <b>{currentPage?.name}</b>.</p>
+            <div className="settings-panel">
+                <h3 className="settings-title">Page Theme</h3>
+                <p className="settings-subtitle">Settings for <b>{currentPage?.name}</b></p>
                 
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs">Primary Color</label>
-                    <div className="flex gap-2">
+                <div className="setting-group">
+                    <label>Primary Color</label>
+                    <div className="color-picker-wrapper">
                         <input type="color" 
                             value={currentTheme.primaryColor || '#000000'} 
                             onChange={(e) => updateTheme('primaryColor', e.target.value)}
-                            className="w-8 h-8 rounded cursor-pointer border-none bg-transparent"
+                            className="color-swatch"
                         />
                         <input type="text" 
                             value={currentTheme.primaryColor || ''}
                             onChange={(e) => updateTheme('primaryColor', e.target.value)}
-                            className="bg-[#333] border border-[#444] rounded p-1 text-xs flex-1 text-white"
+                            className="text-input"
                             placeholder="#000000"
                         />
                     </div>
                 </div>
 
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs">Secondary Color</label>
-                    <div className="flex gap-2">
+                <div className="setting-group">
+                    <label>Secondary Color</label>
+                    <div className="color-picker-wrapper">
                         <input type="color" 
                             value={currentTheme.secondaryColor || '#ffffff'} 
                             onChange={(e) => updateTheme('secondaryColor', e.target.value)}
-                            className="w-8 h-8 rounded cursor-pointer border-none bg-transparent"
+                            className="color-swatch"
                         />
                         <input type="text" 
                             value={currentTheme.secondaryColor || ''}
                             onChange={(e) => updateTheme('secondaryColor', e.target.value)}
-                            className="bg-[#333] border border-[#444] rounded p-1 text-xs flex-1 text-white"
+                            className="text-input"
                             placeholder="#ffffff"
                         />
                     </div>
                 </div>
 
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs">Font Family</label>
+                <div className="setting-group">
+                    <label>Font Family</label>
                     <select 
                         value={currentTheme.fontFamily || 'Arial'} 
                         onChange={(e) => updateTheme('fontFamily', e.target.value)}
-                        className="bg-[#333] border border-[#444] rounded p-2 text-xs text-white"
+                        className="dropdown-input"
                     >
                         <option value="Arial, sans-serif">Arial</option>
                         <option value="'Times New Roman', serif">Times New Roman</option>
@@ -146,12 +145,12 @@ export default function Sidebar({ messages, isThinking, onSend, selectedContext,
                     </select>
                 </div>
 
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs">Border Radius (Buttons/Cards)</label>
+                <div className="setting-group">
+                    <label>Border Radius</label>
                     <input type="text" 
                         value={currentTheme.borderRadius || '4px'} 
                         onChange={(e) => updateTheme('borderRadius', e.target.value)}
-                        className="bg-[#333] border border-[#444] rounded p-2 text-xs text-white"
+                        className="text-input"
                         placeholder="e.g. 8px"
                     />
                 </div>
