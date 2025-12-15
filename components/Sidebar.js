@@ -20,9 +20,11 @@ export default function Sidebar({ messages, isThinking, onSend, selectedContext,
     setInput('');
   };
 
-  // Helper to update specific theme key
+  // Helper to update specific theme key safely
   const updateTheme = (key, value) => {
-    onThemeChange({ ...currentTheme, [key]: value });
+    if (onThemeChange && currentTheme) {
+        onThemeChange({ ...currentTheme, [key]: value });
+    }
   };
 
   return (
@@ -56,12 +58,12 @@ export default function Sidebar({ messages, isThinking, onSend, selectedContext,
         {activeTab === 'chat' && (
             <>
                 <div className="chat-messages">
-                {messages.length === 0 && (
+                {(!messages || messages.length === 0) && (
                     <div className="text-gray-500 text-center mt-10 text-sm">
                         Start chatting to edit <b>{currentPage?.name}</b>.
                     </div>
                 )}
-                {messages.map((msg, i) => (
+                {messages && messages.map((msg, i) => (
                     <div key={i} className={`msg ${msg.role}`}>
                     {msg.text}
                     </div>
@@ -90,7 +92,7 @@ export default function Sidebar({ messages, isThinking, onSend, selectedContext,
         )}
 
         {/* === TAB 2: PAGE SETTINGS === */}
-        {activeTab === 'settings' && (
+        {activeTab === 'settings' && currentTheme && (
             <div className="p-4 flex flex-col gap-4 text-white overflow-y-auto">
                 <h3 className="text-sm font-bold text-gray-400 uppercase">Page Theme</h3>
                 <p className="text-xs text-gray-500">These settings apply ONLY to <b>{currentPage?.name}</b>.</p>
@@ -155,10 +157,6 @@ export default function Sidebar({ messages, isThinking, onSend, selectedContext,
                 </div>
             </div>
         )}
-      </div>
-    </div>
-  );
-}       </div>
       </div>
     </div>
   );
