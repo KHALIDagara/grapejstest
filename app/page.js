@@ -6,10 +6,10 @@ import Script from 'next/script';
 // CONFIGURATION
 const CONFIG = {
   // ⚠️ REPLACE WITH YOUR ACTUAL KEY
-  apiKey: 'OPENROUTER_API_KEY', 
-  siteUrl: 'http://localhost:3000',
+  apiKey: process.env.NEXT_PUBLIC_OPENROUTER_API_KEY, 
+  siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
   appName: 'GrapesJS AI Builder',
-  model: 'google/gemini-2.0-flash-lite-preview-02-05:free'
+  model: process.env.NEXT_PUBLIC_AI_MODEL
 };
 
 export default function Home() {
@@ -31,7 +31,7 @@ export default function Home() {
       if (window.GrapesJsStudioSDK && !editorRef.current) {
         window.GrapesJsStudioSDK.createStudioEditor({
           root: '#studio-editor',
-          licenseKey: 'e50c20f9bbf746e4a85e7bd9ebf0faa601ba3461f1864001a90319272a846cbf', 
+          licenseKey: process.env.NEXT_PUBLIC_GRAPESJS_LICENSE_KEY, 
           theme: 'dark',
           project: { type: 'web' },
           assets: { storageType: 'self' },
