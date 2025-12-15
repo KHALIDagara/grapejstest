@@ -14,7 +14,7 @@ export default function Home() {
     // 2. THE STORE (Dictionary of Pages)
     const [pagesStore, setPagesStore] = useState({
         'page-1': {
-            messages: [{ role: 'assistant', text: 'Hello! Editing Home Page.' }],
+            messages: [{ role: 'assistant', content: 'Hello! Editing Home Page.' }],
             theme: { primaryColor: '#2563eb', secondaryColor: '#ffffff', fontFamily: 'Arial', borderRadius: '4px' }
         }
     });
@@ -39,7 +39,7 @@ export default function Home() {
                 return {
                     ...prev,
                     [pageInfo.id]: {
-                        messages: [{ role: 'assistant', text: `Switched to ${pageInfo.name}. Ready to edit.` }],
+                        messages: [{ role: 'assistant', content: `Switched to ${pageInfo.name}. Ready to edit.` }],
                         theme: { primaryColor: '#000000', secondaryColor: '#ffffff' }
                     }
                 };
@@ -65,8 +65,8 @@ export default function Home() {
         const currentHistory = currentData.messages;
         const currentTheme = currentData.theme;
 
-        const userMsg = { role: 'user', text };
-        const placeholderBotMsg = { role: 'assistant', text: '' };
+        const userMsg = { role: 'user', content: text };
+        const placeholderBotMsg = { role: 'assistant', content: '' };
 
         setPagesStore(prev => ({
             ...prev,
@@ -81,7 +81,7 @@ export default function Home() {
             setPagesStore(prev => {
                 const pageData = prev[currentPage.id];
                 const msgs = [...pageData.messages];
-                msgs[msgs.length - 1] = { role: 'assistant', text: streamedText };
+                msgs[msgs.length - 1] = { role: 'assistant', content: streamedText };
                 return { ...prev, [currentPage.id]: { ...pageData, messages: msgs } };
             });
         };
