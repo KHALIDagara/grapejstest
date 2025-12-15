@@ -106,7 +106,7 @@ export function useAI() {
   };
 
   // --- MAIN FUNCTION ---
-  const generateResponse = async (editor, userText, history, selectedContext, onStreamUpdate, onComplete) => {
+  const generateResponse = async (editor, userText, history, selectedContext, onStreamUpdate, onComplete, theme) => {
     console.log("🚀 [DEBUG] generateResponse STARTED");
 
     if (!userText.trim() || !editor) {
@@ -133,6 +133,18 @@ export function useAI() {
       ${!isWrapper ? `Element Classes: ${selectedModel.getClasses().join(' ') || 'none'}` : ""}
       ${!isWrapper ? `\nElement HTML:\n\`\`\`html\n${selectedModel.toHTML()}\n\`\`\`\n` : ""}
       =============================================
+
+      ${theme ? `
+      =============================================
+      *** PAGE THEME (USE THESE COLORS/STYLES) ***
+      =============================================
+      Primary Color: ${theme.primaryColor || '#2563eb'}
+      Secondary Color: ${theme.secondaryColor || '#ffffff'}
+      Font Family: ${theme.fontFamily || 'Arial'}
+      Border Radius: ${theme.borderRadius || '8px'}
+      =============================================
+      When adding new elements (buttons, sections, etc.), USE THESE THEME VALUES for consistency!
+      ` : ""}
 
       PAGE STRUCTURE (for reference):
       \`\`\`html
@@ -174,7 +186,7 @@ export function useAI() {
       - You MUST call a tool. NEVER respond with text explanations.
       - Call ONLY ONE tool per response.
       - Use \`insert_sibling_before\`/\`insert_sibling_after\` when adding elements AS SIBLINGS (before/after), use \`append_component\` when adding elements AS CHILDREN (inside).
-      - Use modern CSS (flexbox, grid, good spacing, rounded corners).
+      - When creating new elements, USE THE PAGE THEME colors (Primary Color for buttons/accents, Secondary Color for backgrounds, Font Family for text, Border Radius for corners).
       - For images, use placeholder URLs like https://placehold.co/600x400 unless the user specifies a URL.
       - DO NOT explain what you are doing. Just call the tool.
     `;

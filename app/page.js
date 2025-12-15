@@ -95,7 +95,8 @@ export default function Home() {
             historyToSend,
             selectedElement,
             onStreamUpdate,
-            null // No completion callback needed, tools handle the DOM
+            null, // No completion callback needed, tools handle the DOM
+            currentTheme // Pass theme so AI can use it
         );
     };
 
