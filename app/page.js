@@ -160,7 +160,7 @@ export default function Home() {
             padding: 8px; border-radius: 4px; font-size: 12px; width: 100%;
         }
 
-        /* Chat Styles (retained) */
+        /* Chat Styles */
         .chat-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
         .empty-state { text-align: center; color: #666; font-size: 13px; margin-top: 40px; }
         .msg { padding: 10px 14px; border-radius: 8px; line-height: 1.5; font-size: 14px; max-width: 90%; }
@@ -186,6 +186,11 @@ export default function Home() {
           onThemeChange={handleThemeChange}
           currentPage={currentPage}
           selectedContext={selectedElement}
+          
+          // --- NEW: Handle Manual Clear ---
+          onClearContext={() => setSelectedElement(null)} 
+          // --------------------------------
+          
           isThinking={isThinking} 
           onSend={handleSendMessage} 
         />
