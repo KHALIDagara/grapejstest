@@ -1,5 +1,3 @@
-//utils/aiTools.js
-
 export const AI_TOOLS = [
   {
     type: "function",
@@ -12,7 +10,7 @@ export const AI_TOOLS = [
           css: {
             type: "object",
             description: "A JSON object of CSS properties (e.g., {'border-radius': '10px', 'background-color': '#000'})",
-            additionalProperties: { type: "string" } 
+            additionalProperties: { type: "string" }
           }
         },
         required: ["css"]
@@ -40,7 +38,7 @@ export const AI_TOOLS = [
     type: "function",
     function: {
       name: "append_component",
-      description: "Insert a NEW component (like a button, image, or text) *inside* the selected element at the end.",
+      description: "Insert a NEW component (like a button, image, or text) *inside* the selected element at the very end of its children.",
       parameters: {
         type: "object",
         properties: {
@@ -50,6 +48,52 @@ export const AI_TOOLS = [
           }
         },
         required: ["component"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "generate_whole_page",
+      description: "Replaces the ENTIRE page content with new HTML. Use this ONLY when the user asks to 'generate a landing page', 'create a website', or completely clear and rebuild the page.",
+      parameters: {
+        type: "object",
+        properties: {
+          html: {
+            type: "string",
+            description: "The complete HTML structure for the new page body."
+          }
+        },
+        required: ["html"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_component",
+      description: "Remove the currently selected component from the page.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: []
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "add_class",
+      description: "Add a CSS class to the selected component. Useful for applying utility classes or pre-defined styles.",
+      parameters: {
+        type: "object",
+        properties: {
+          className: {
+            type: "string",
+            description: "The name of the class to add."
+          }
+        },
+        required: ["className"]
       }
     }
   }
