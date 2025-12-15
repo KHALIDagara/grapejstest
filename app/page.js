@@ -7,52 +7,66 @@ import { useAI } from '@/hooks/useAI';
 export default function Home() {
   const editorRef = useRef(null);
   const [selectedElement, setSelectedElement] = useState(null); 
-  
-  // Destructure resetHistory
-  const { messages, isThinking, sendMessage, resetHistory } = useAI(); 
+  const [currentPage, setCurrentPage] = useState({ name: 'Home', id: 'root' });
 
+  const { messages, isThinking, sendMessage, resetHistory } = useAI(); 
   const prevSelectionId = useRef(null);
 
-  // --- 1. Detect Context Switch (Reset History) ---
+  // 1. Context Switch Logic
   useEffect(() => {
     if (selectedElement && selectedElement.id !== prevSelectionId.current) {
-        console.log("Context switched. Resetting AI memory.");
         resetHistory();
         prevSelectionId.current = selectedElement.id;
     }
   }, [selectedElement, resetHistory]);
 
-  // --- 2. Handle Page Switch ---
-  const handlePageChange = () => {
-      console.log("Page switched. Resetting AI.");
+  // 2. Page Switch Logic
+  const handlePageChange = (pageInfo) => {
+      console.log("Page switched to:", pageInfo.name);
+      setCurrentPage(pageInfo);
       resetHistory();
       setSelectedElement(null);
       prevSelectionId.current = null;
   };
 
+  // --- 3. FIXED INJECTION LOGIC ---
   const handleAICompletion = (htmlCode) => {
     if (!editorRef.current) return;
+    
     try {
         if (selectedElement) {
             const selectedComponent = editorRef.current.getSelected();
+            
             if (selectedComponent) {
-                console.log("Replacing component:", selectedComponent);
-                selectedComponent.replaceWith(htmlCode);
+                // SAFETY CHECK: Does it have a parent?
+                const parent = selectedComponent.parent();
+
+                if (parent) {
+                    // Normal component: Replace it
+                    console.log("Replacing component via Parent");
+                    selectedComponent.replaceWith(htmlCode);
+                } else {
+                    // Root/Wrapper (No parent): Update INSIDE content only
+                    // We cannot "replace" the body, only what's inside it.
+                    console.log("Updating Wrapper Content");
+                    selectedComponent.components(htmlCode);
+                }
             } else {
+                // Fallback if selection was lost during generation
                 editorRef.current.addComponents(htmlCode);
             }
         } else {
-            console.log("Adding new components...");
+            // No selection: Append to end of page
             editorRef.current.addComponents(htmlCode); 
         }
     } catch (e) {
         console.error("Editor Injection Failed:", e);
     }
   };
+  // --------------------------------
 
   return (
     <>
-      {/* --- RESTORED CSS --- */}
       <style jsx global>{`
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -63,7 +77,7 @@ export default function Home() {
         }
         .main-layout { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
 
-        /* === SIDEBAR === */
+        /* SIDEBAR */
         .sidebar {
           position: relative; width: 400px; background: #1a1a1a;
           border-right: 1px solid #333; display: flex; flex-direction: column;
@@ -124,7 +138,7 @@ export default function Home() {
         .send-btn:hover:not(:disabled) { background: #1d4ed8; }
         .send-btn:disabled { background: #334155; cursor: not-allowed; }
 
-        /* === EDITOR === */
+        /* EDITOR */
         .editor-area { position: relative; flex: 1; width: 100%; height: 100%; background: #000; }
         .loading-overlay {
           position: absolute; top: 0; left: 0; right: 0; bottom: 0;
@@ -137,9 +151,10 @@ export default function Home() {
       <div className="main-layout">
         <Sidebar 
           messages={messages} 
-          selectedContext={selectedElement} 
+          selectedContext={selectedElement}
+          currentPage={currentPage}
           isThinking={isThinking} 
-          onSend={(text) => sendMessage(text, selectedElement, handleAICompletion)} 
+          onSend={(text) => sendMessage(text, selectedElement, currentPage, handleAICompletion)} 
         />
         <Editor 
           onReady={(editor) => { editorRef.current = editor; }} 
