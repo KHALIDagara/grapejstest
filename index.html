@@ -3,129 +3,214 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GrapesJS Studio SDK with AI Pane</title>
+    <title>GrapesJS Studio SDK with AI</title>
     <script src="https://unpkg.com/@grapesjs/studio-sdk/dist/index.umd.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/@grapesjs/studio-sdk/dist/style.css" />
-    
+
     <style>
-      .ai-chat-container { display: flex; flex-direction: column; height: 100%; padding: 10px; box-sizing: border-box; }
-      .ai-messages { flex: 1; overflow-y: auto; border: 1px solid #444; margin-bottom: 10px; padding: 10px; border-radius: 4px; background: #1e1e1e; color: #ddd; }
-      .ai-input-group { display: flex; gap: 5px; }
-      .ai-input { flex: 1; padding: 8px; border-radius: 4px; border: 1px solid #444; background: #2a2a2a; color: white; }
-      .ai-btn { padding: 8px 12px; border-radius: 4px; border: none; background: #9c27b0; color: white; cursor: pointer; }
+      /* Styles for our custom AI Pane */
+      #ai-panel-content {
+        display: none; /* Hidden by default */
+        flex-direction: column;
+        height: 100%;
+        background: #1e1e1e; /* Match Dark Theme */
+        color: #ddd;
+        font-family: sans-serif;
+        border-left: 1px solid #444;
+      }
+      
+      /* Make it visible when active */
+      #ai-panel-content.active {
+        display: flex;
+      }
+
+      .ai-header { padding: 15px; font-weight: bold; border-bottom: 1px solid #333; }
+      .ai-messages { flex: 1; padding: 15px; overflow-y: auto; font-size: 0.9rem; }
+      .ai-input-area { padding: 15px; border-top: 1px solid #333; display: flex; gap: 5px; }
+      
+      .ai-input { flex: 1; background: #333; border: 1px solid #555; color: white; padding: 8px; border-radius: 4px; }
+      .ai-btn { background: #9c27b0; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
       .ai-btn:hover { background: #7b1fa2; }
-      .msg { margin-bottom: 8px; font-size: 0.9em; }
-      .msg.user { text-align: right; color: #a5d6a7; }
-      .msg.bot { text-align: left; color: #90caf9; }
+
+      .msg { margin-bottom: 10px; padding: 8px; border-radius: 4px; max-width: 90%; }
+      .msg.bot { background: #2a2a2a; align-self: flex-start; border: 1px solid #444; }
+      .msg.user { background: #4a148c; align-self: flex-end; margin-left: auto; text-align: right; }
+
+      /* Style for the custom Tab Button we will inject */
+      .custom-ai-tab {
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        padding: 10px; 
+        cursor: pointer; 
+        opacity: 0.7;
+        color: white;
+        font-size: 14px;
+        font-weight: 500;
+        border-bottom: 2px solid transparent;
+      }
+      .custom-ai-tab:hover { opacity: 1; background: rgba(255,255,255,0.05); }
+      .custom-ai-tab.active { opacity: 1; border-bottom: 2px solid #9c27b0; color: #9c27b0; }
     </style>
   </head>
   <body>
     <div id="studio-editor" style="height: 100dvh"></div>
+
     <script>
       let studioEditor = null;
 
-      // 1. Define a function that returns your Chatbot DOM element
-      function createChatbotUI() {
-        const container = document.createElement('div');
-        container.className = 'ai-chat-container';
-        
-        container.innerHTML = `
-          <div class="ai-messages" id="ai-messages">
-            <div class="msg bot">Hello! I am your AI assistant. How can I help you build this page?</div>
-          </div>
-          <div class="ai-input-group">
-            <input type="text" class="ai-input" id="ai-input" placeholder="Ask AI..." />
-            <button class="ai-btn" id="ai-send">Send</button>
-          </div>
-        `;
-
-        // Add simple functionality
-        const btn = container.querySelector('#ai-send');
-        const input = container.querySelector('#ai-input');
-        const msgArea = container.querySelector('#ai-messages');
-
-        btn.onclick = () => {
-          const text = input.value;
-          if(!text) return;
-          
-          // 1. Show User Message
-          msgArea.innerHTML += `<div class="msg user">${text}</div>`;
-          input.value = '';
-
-          // 2. Simulate AI Response (Connect your API here)
-          setTimeout(() => {
-            msgArea.innerHTML += `<div class="msg bot">I heard you say: "${text}". (Connect OpenAI here!)</div>`;
-            msgArea.scrollTop = msgArea.scrollHeight; // Auto scroll to bottom
-          }, 1000);
-        };
-
-        return container;
-      }
-
-      // 2. Initialize Editor with Custom Layout
       GrapesJsStudioSDK.createStudioEditor({
         root: '#studio-editor',
         licenseKey: 'e50c20f9bbf746e4a85e7bd9ebf0faa601ba3461f1864001a90319272a846cbf',
         theme: 'dark',
         project: { type: 'web' },
         
-        // --- THIS IS THE KEY PART ---
-        layout: {
-          type: 'row', // Main container is a row
-          style: { height: '100%' },
-          children: [
-            // LEFT SIDEBAR (Where we add the tabs)
-            {
-              type: 'sidebarLeft',
-              children: {
-                type: 'tabs',
-                value: 'pages', // Default selected tab
-                tabs: [
-                  // Tab 1: Standard Pages Panel
-                  {
-                    id: 'pages',
-                    label: 'Pages',
-                    children: { type: 'panelPages', style: { height: '100%' } }
-                  },
-                  // Tab 2: Standard Layers Panel
-                  {
-                    id: 'layers',
-                    label: 'Layers',
-                    children: { type: 'panelLayers', style: { height: '100%' } }
-                  },
-                  // Tab 3: YOUR NEW AI PANE
-                  {
-                    id: 'ai-chat',
-                    label: 'AI Assistant', // Title on the tab
-                    children: {
-                      type: 'custom', 
-                      render: () => createChatbotUI(), // Render your custom DOM
-                      style: { height: '100%' }
-                    }
-                  }
-                ]
-              }
-            },
-            
-            // CENTER: Top Bar + Canvas
-            {
-              type: 'canvasSidebarTop',
-              sidebarTop: {
-                leftContainer: { buttons: [] } // Standard top bar buttons
-              }
-            },
-            
-            // RIGHT SIDEBAR (Styles, Properties, etc.)
-            { type: 'sidebarRight' }
-          ]
-        },
-        // -----------------------------
-
+        // REMOVED THE BROKEN 'layout' CONFIG
+        // We will inject the UI manually in onReady
+        
         onReady: (editor) => {
           studioEditor = editor;
-          console.log('Editor ready');
+          console.log('Editor ready. Injecting AI pane...');
+          
+          // Slight delay to ensure DOM is fully rendered by the SDK
+          setTimeout(injectAIInterface, 500);
         }
       });
+
+      function injectAIInterface() {
+        // 1. FIND THE SIDEBAR CONTAINERS
+        // We look for the area where Tabs (Pages/Layers) are located.
+        // NOTE: These class names are based on standard GrapesJS structure. 
+        // If they change, we might need to inspect the page to find the new ones.
+        const root = document.querySelector('#studio-editor');
+        
+        // Try to find the tab container (usually at the top of the sidebar)
+        // We look for an element that contains "Pages" text to be sure.
+        const allDivs = root.querySelectorAll('div');
+        let tabContainer = null;
+        let contentContainer = null;
+
+        // "Hack" to find the correct containers by their text content
+        for (const div of allDivs) {
+            if (div.innerText === 'Pages' && div.parentElement && div.parentElement.style.display === 'flex') {
+                // This is likely the tab button container
+                tabContainer = div.parentElement;
+                break;
+            }
+        }
+
+        if (!tabContainer) {
+            console.warn("Could not find Tab Container. Inspect the DOM to find the correct class.");
+            return;
+        }
+
+        // The content container is usually a sibling or parent's sibling
+        // We will try to find where the Pages panel lives.
+        // Usually, the sidebar is split into [Tabs] and [Content]
+        const sidebar = tabContainer.closest('[class*="sidebar"], [class*="panel"]');
+        if (sidebar) {
+             // We will append our content panel to the end of the sidebar
+             contentContainer = sidebar; 
+        }
+
+        if (!tabContainer || !contentContainer) return;
+
+        // 2. CREATE THE AI TAB BUTTON
+        const aiTab = document.createElement('div');
+        aiTab.className = 'custom-ai-tab';
+        aiTab.innerText = 'AI Assistant'; // Or use an Icon
+        aiTab.onclick = () => toggleAIPanel(true, tabContainer, aiTab);
+        
+        // Append it next to Pages/Layers
+        tabContainer.appendChild(aiTab);
+
+        // 3. CREATE THE AI CONTENT PANEL
+        const aiPanel = document.createElement('div');
+        aiPanel.id = 'ai-panel-content';
+        aiPanel.innerHTML = `
+            <div class="ai-header">AI Assistant</div>
+            <div class="ai-messages" id="ai-messages-box">
+                <div class="msg bot">Hello! I am ready to help.</div>
+            </div>
+            <div class="ai-input-area">
+                <input type="text" class="ai-input" id="ai-prompt" placeholder="Describe layout..." />
+                <button class="ai-btn" id="ai-submit">Go</button>
+            </div>
+        `;
+        
+        // Append content to the sidebar
+        // We insert it after the existing panels so it overlaps them when active
+        // or we can make it absolute. Let's try appending first.
+        contentContainer.appendChild(aiPanel);
+
+        // Add Logic for the AI Button
+        document.getElementById('ai-submit').onclick = handleAISubmit;
+        
+        // Add Logic to handle "Switching" tabs
+        // We need to listen to clicks on the ORIGINAL tabs (Pages/Layers) to hide our AI panel
+        Array.from(tabContainer.children).forEach(child => {
+            if (child !== aiTab) {
+                child.addEventListener('click', () => toggleAIPanel(false, tabContainer, aiTab));
+            }
+        });
+      }
+
+      function toggleAIPanel(show, tabContainer, aiTab) {
+        const aiPanel = document.getElementById('ai-panel-content');
+        
+        if (show) {
+            // Hide other standard panels by targeting the sibling content
+            // This is tricky without exact classes, so we force our panel to cover them
+            // via CSS: flex: 1
+            aiPanel.classList.add('active');
+            aiTab.classList.add('active');
+            
+            // Optional: Hide siblings if they overlap
+            let sibling = aiPanel.previousElementSibling;
+            while (sibling) {
+                if (sibling !== tabContainer && !sibling.classList.contains('custom-ai-tab')) {
+                   sibling.style.display = 'none'; // Temporarily hide others
+                }
+                sibling = sibling.previousElementSibling;
+            }
+            
+        } else {
+            aiPanel.classList.remove('active');
+            aiTab.classList.remove('active');
+            
+            // Restore siblings
+            let sibling = aiPanel.previousElementSibling;
+            while (sibling) {
+                if (sibling !== tabContainer) {
+                   sibling.style.display = ''; // Restore default
+                }
+                sibling = sibling.previousElementSibling;
+            }
+        }
+      }
+
+      function handleAISubmit() {
+        const input = document.getElementById('ai-prompt');
+        const box = document.getElementById('ai-messages-box');
+        const text = input.value;
+        if (!text) return;
+
+        // User Message
+        box.innerHTML += `<div class="msg user">${text}</div>`;
+        input.value = '';
+
+        // Fake AI Response
+        setTimeout(() => {
+            box.innerHTML += `<div class="msg bot">I see you want "${text}". (API Logic here)</div>`;
+            
+            // Example: Actually create code
+            if (studioEditor) {
+                studioEditor.addComponents(`<div style="padding:20px; border:2px dashed red;">Generated: ${text}</div>`);
+            }
+            
+            box.scrollTop = box.scrollHeight;
+        }, 800);
+      }
     </script>
   </body>
 </html>
