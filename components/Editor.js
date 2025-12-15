@@ -13,47 +13,59 @@ export default function Editor({ onReady, onSelection }) {
         
         const container = document.getElementById('studio-editor');
         if (container && container.innerHTML === '') {
+            
             window.GrapesJsStudioSDK.createStudioEditor({
               root: '#studio-editor',
               licenseKey: process.env.NEXT_PUBLIC_GRAPESJS_LICENSE_KEY || '',
               theme: 'dark',
               project: { type: 'web' },
               assets: { storageType: 'self' },
+              
+              // 1. Tailwind Plugin (Handles the UI/Dropdowns on the right)
               plugins: [
                 {
                   id: 'grapesjs-tailwind',
                   src: grapesjsTailwind,
-                  options: {
-                    // Optional: Custom config for the plugin
-                    suggestClasses: true // Enables autocomplete for Tailwind classes
-                  }
+                  options: { suggestClasses: true }
                 }
               ],
-              // 3. Keep the Canvas Script (Required for Visual Rendering)
-              // The plugin handles the UI (dropdowns), but this handles the Rendering.
-              canvas: {
-                scripts: ['https://cdn.tailwindcss.com']
-              },
-             
+
               onReady: (editor) => {
                 setIsLoaded(true);
                 window.studioEditor = editor; 
 
-                // --- 1. SELECTION LISTENER (FIXED) ---
-                editor.on('component:selected', (model) => {
-                    // Safety check
-                    if (!model) return;
+                // --- FORCE INJECT TAILWIND (The Fix) ---
+                // We manually grab the iframe and shove the script in.
+                // This bypasses any configuration merging issues.
+                const frameEl = editor.Canvas.getFrameEl();
+                const frameDoc = frameEl.contentWindow.document;
+                
+                const script = frameDoc.createElement('script');
+                script.src = "https://cdn.tailwindcss.com";
+                script.onload = () => {
+                    // Optional: Configure Tailwind to play nice with GrapesJS
+                    const configScript = frameDoc.createElement('script');
+                    configScript.innerHTML = `
+                        tailwind.config = {
+                            corePlugins: { preflight: false } // Disable reset to save default styles
+                        }
+                    `;
+                    frameDoc.head.appendChild(configScript);
+                    console.log("✅ Tailwind loaded in Canvas");
+                };
+                frameDoc.head.appendChild(script);
+                // ---------------------------------------
 
+                editor.on('component:selected', (model) => {
+                    if (!model) return;
                     const elData = {
-                        // FIX: use .cid (property), not .getCid() (function)
-                        id: model.cid, 
+                        id: model.cid,
                         tagName: model.get('tagName'),
                         currentHTML: model.toHTML() 
                     };
                     if (onSelection) onSelection(elData);
                 });
 
-                // --- 2. DESELECTION LISTENER ---
                 editor.on('component:deselected', () => {
                     if (onSelection) onSelection(null);
                 });
