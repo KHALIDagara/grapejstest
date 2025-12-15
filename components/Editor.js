@@ -21,7 +21,6 @@ export default function Editor({ onReady, onSelection }) {
               project: { type: 'web' },
               assets: { storageType: 'self' },
               
-              // 1. Tailwind Plugin (Handles the UI/Dropdowns on the right)
               plugins: [
                 {
                   id: 'grapesjs-tailwind',
@@ -34,27 +33,35 @@ export default function Editor({ onReady, onSelection }) {
                 setIsLoaded(true);
                 window.studioEditor = editor; 
 
-                // --- FORCE INJECT TAILWIND (The Fix) ---
-                // We manually grab the iframe and shove the script in.
-                // This bypasses any configuration merging issues.
+                // --- 1. FORCE INJECT TAILWIND ---
                 const frameEl = editor.Canvas.getFrameEl();
-                const frameDoc = frameEl.contentWindow.document;
                 
-                const script = frameDoc.createElement('script');
-                script.src = "https://cdn.tailwindcss.com";
-                script.onload = () => {
-                    // Optional: Configure Tailwind to play nice with GrapesJS
-                    const configScript = frameDoc.createElement('script');
-                    configScript.innerHTML = `
-                        tailwind.config = {
-                            corePlugins: { preflight: false } // Disable reset to save default styles
-                        }
-                    `;
-                    frameDoc.head.appendChild(configScript);
-                    console.log("✅ Tailwind loaded in Canvas");
+                // Helper to load script
+                const injectScript = () => {
+                    const frameDoc = frameEl.contentWindow?.document;
+                    if (!frameDoc) return;
+
+                    // Prevent duplicate loading
+                    if (frameDoc.getElementById('tailwind-script')) return;
+
+                    const script = frameDoc.createElement('script');
+                    script.id = 'tailwind-script';
+                    script.src = "https://cdn.tailwindcss.com";
+                    
+                    script.onload = () => {
+                        // Disable Preflight to prevent layout shifts
+                        const config = frameDoc.createElement('script');
+                        config.innerHTML = `tailwind.config = { corePlugins: { preflight: false } }`;
+                        frameDoc.head.appendChild(config);
+                        console.log("✅ Tailwind injected successfully!");
+                    };
+                    frameDoc.head.appendChild(script);
                 };
-                frameDoc.head.appendChild(script);
-                // ---------------------------------------
+
+                // Try immediately, and also listen for frame load (rendering changes)
+                injectScript();
+                editor.on('load', injectScript);
+                // --------------------------------
 
                 editor.on('component:selected', (model) => {
                     if (!model) return;

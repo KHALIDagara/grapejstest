@@ -30,9 +30,9 @@ export function useAI() {
         // MODE A: EDITING SPECIFIC ELEMENT
         systemPrompt = `
            You are an expert web developer.
-           The user has selected a specific HTML component: <${selectedContext.tagName}>.
+           The user has selected: <${selectedContext.tagName}>.
            
-           CURRENT HTML OF SELECTION:
+           CURRENT HTML:
            \`\`\`html
            ${selectedContext.currentHTML}
            \`\`\`
@@ -40,13 +40,12 @@ export function useAI() {
            USER REQUEST: "${userText}"
 
            INSTRUCTIONS:
-           1. Return the **UPDATED HTML** for this component only.
-           2. Do NOT wrap it in <html> or <body>.
-           3. Maintain the original ID if possible, or allow GrapesJS to handle it.
-           4. You can add Tailwind classes or inline styles.
-           5. Output ONLY the code. No markdown.
-        `;
-    } else {
+           1. Return ONLY the updated HTML for this component.
+           2. Use **Tailwind CSS** classes.
+           3. IMPORTANT: If the user changes color, background, or size, use the '!' prefix to override existing styles (e.g., class="!bg-red-600 !text-white").
+           4. Do NOT output markdown.
+        `;  
+          } else {
         // MODE B: GLOBAL GENERATION
         systemPrompt = `
            You are an expert GrapesJS developer.
