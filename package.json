@@ -11,7 +11,7 @@
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "@grapesjs/studio-sdk": "latest"
+    "@grapesjs/studio-sdk": "latest",
     "grapesjs-tailwind": "latest"
   }
 }
