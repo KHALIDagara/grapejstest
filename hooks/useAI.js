@@ -126,7 +126,7 @@ export function useAI() {
 
     try {
       const payload = {
-        model: 'google/gemini-2.0-flash-exp:free',
+        model: process.env.NEXT_PUBLIC_AI_MODEL || 'google/gemini-2.0-flash-exp:free',
         messages: [{ role: 'system', content: systemPrompt }, ...history],
         tools: AI_TOOLS,
         tool_choice: "auto"
