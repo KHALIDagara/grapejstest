@@ -3,14 +3,12 @@ import { useState } from 'react';
 export function useAI() {
   const [isThinking, setIsThinking] = useState(false);
 
-  // We no longer manage 'messages' state here. 
-  // We accept the CURRENT history to send to the API.
   const generateResponse = async (userText, history, selectedContext, pageTheme, onStreamUpdate, onComplete) => {
     if (!userText.trim()) return;
 
     setIsThinking(true);
 
-    // --- CONSTRUCT SYSTEM PROMPT ---
+    // --- 1. CONSTRUCT SYSTEM PROMPT ---
     let systemPrompt = '';
     
     // Inject Page Theme into the Prompt
@@ -37,7 +35,7 @@ export function useAI() {
            USER REQUEST: "${userText}"
            INSTRUCTIONS:
            1. Return ONLY the updated HTML.
-           2. **Use Inline CSS** (style="...") for all styling. 
+           2. Use Inline CSS (style="...") for all styling. 
            3. Do NOT use classes.
         `;
     } else {
@@ -47,10 +45,17 @@ export function useAI() {
            INSTRUCTIONS:
            1. Output ONLY valid HTML.
            2. Start directly with <section>/<div>.
-           3. **Use Inline CSS** (style="...") for all styling.
+           3. Use Inline CSS (style="...") for all styling.
            4. Do NOT use classes.
         `;
     }
+
+    // --- 2. SANITIZE MESSAGES FOR API (THE FIX) ---
+    // The store uses 'bot'/'text', but API needs 'assistant'/'content'
+    const apiMessages = history.map(msg => ({
+        role: msg.role === 'bot' ? 'assistant' : msg.role,
+        content: msg.text || msg.content // Handle both keys
+    }));
 
     try {
       const response = await fetch('/api/chat', {
@@ -58,7 +63,7 @@ export function useAI() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: process.env.NEXT_PUBLIC_AI_MODEL || 'google/gemini-2.0-flash-exp:free',
-          messages: [{ role: 'system', content: systemPrompt }, ...history]
+          messages: [{ role: 'system', content: systemPrompt }, ...apiMessages]
         })
       });
 
@@ -82,7 +87,6 @@ export function useAI() {
               const content = json.choices[0]?.delta?.content || "";
               if (content) {
                 fullText += content;
-                // Call the parent to update the "Streaming" message
                 if (onStreamUpdate) onStreamUpdate(fullText);
               }
             } catch (e) {}
