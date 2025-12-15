@@ -24,7 +24,30 @@ export default function Editor({ onReady, onSelection, onPageChange }) {
                 setIsLoaded(true);
                 window.studioEditor = editor; 
 
-                // 1. SELECTION LISTENER
+                // --- HELPER: Get Page Info ---
+                const sendPageInfo = () => {
+                    const page = editor.Pages.getSelected();
+                    
+                    // FIX: Check if 'page' exists before accessing .id
+                    if (page && onPageChange) {
+                        onPageChange({
+                            id: page.id,
+                            name: page.get('name') || 'Untitled Page'
+                        });
+                    }
+                };
+
+                // 1. Send initial page info
+                sendPageInfo();
+
+                // 2. Listen for Page Switches
+                editor.on('page:select', () => {
+                    sendPageInfo();
+                    // Also clear selection when switching pages
+                    if (onSelection) onSelection(null);
+                });
+
+                // 3. Selection Listeners
                 editor.on('component:selected', (model) => {
                     if (!model) return;
                     const elData = {
@@ -35,14 +58,8 @@ export default function Editor({ onReady, onSelection, onPageChange }) {
                     if (onSelection) onSelection(elData);
                 });
 
-                // 2. DESELECTION LISTENER
                 editor.on('component:deselected', () => {
                     if (onSelection) onSelection(null);
-                });
-
-                // 3. PAGE CHANGE LISTENER (New)
-                editor.on('page:select', () => {
-                    if (onPageChange) onPageChange();
                 });
 
                 if (onReady) onReady(editor);
