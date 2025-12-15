@@ -10,7 +10,7 @@ export default function Editor({ onReady }) {
     const interval = setInterval(() => {
       if (window.GrapesJsStudioSDK) {
         clearInterval(interval);
-        
+
         // Prevent double init
         const container = document.getElementById('studio-editor');
         if (container && container.innerHTML === '') {
@@ -33,16 +33,39 @@ export default function Editor({ onReady }) {
 
   return (
     <>
+      <style jsx>{`
+        .editor-container {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          background: black;
+        }
+        .loading {
+          position: absolute;
+          top: 0;
+          right: 0;
+          bottom: 0;
+          left: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #6b7280;
+        }
+        .editor-element {
+          height: 100%;
+        }
+      `}</style>
+
       <link rel="stylesheet" href="https://unpkg.com/@grapesjs/studio-sdk/dist/style.css" />
       <Script src="https://unpkg.com/@grapesjs/studio-sdk/dist/index.umd.js" strategy="lazyOnload" />
-      
-      <div className="relative w-full h-full bg-black">
+
+      <div className="editor-container">
         {!isLoaded && (
-             <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-                Loading Studio SDK...
-             </div>
+          <div className="loading">
+            Loading Studio SDK...
+          </div>
         )}
-        <div id="studio-editor" style={{ height: '100%' }}></div>
+        <div id="studio-editor" className="editor-element"></div>
       </div>
     </>
   );

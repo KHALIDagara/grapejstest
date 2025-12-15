@@ -21,20 +21,37 @@ export default function Home() {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-black font-sans">
-      
-      {/* 1. The AI Sidebar */}
-      <Sidebar 
-        messages={messages} 
-        isThinking={isThinking} 
-        onSend={(text) => sendMessage(text, handleAICompletion)} 
-      />
+    <>
+      <style jsx>{`
+        .main-container {
+          display: flex;
+          height: 100vh;
+          width: 100vw;
+          overflow: hidden;
+          background: black;
+          font-family: sans-serif;
+        }
+        .editor-wrapper {
+          flex: 1;
+          position: relative;
+        }
+      `}</style>
 
-      {/* 2. The GrapesJS Editor */}
-      <div className="flex-1 relative">
-        <Editor onReady={(editor) => { editorRef.current = editor; }} />
+      <div className="main-container">
+
+        {/* 1. The AI Sidebar */}
+        <Sidebar
+          messages={messages}
+          isThinking={isThinking}
+          onSend={(text) => sendMessage(text, handleAICompletion)}
+        />
+
+        {/* 2. The GrapesJS Editor */}
+        <div className="editor-wrapper">
+          <Editor onReady={(editor) => { editorRef.current = editor; }} />
+        </div>
+
       </div>
-
-    </div>
+    </>
   );
 }
