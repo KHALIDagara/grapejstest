@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["file:///home/khalid/Work/grapejstest/src/app/editor/layout.tsx"],"sourcesContent":["import { ReactNode } from 'react'\n\nexport default function EditorPageLayout({\n  children,\n}: {\n  children: ReactNode\n}) {\n  return children\n}\n"],"names":[],"mappings":";;;;AAEe,SAAS,iBAAiB,EACvC,QAAQ,EAGT;IACC,OAAO;AACT"}}]
+}

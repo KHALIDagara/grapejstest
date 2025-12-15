@@ -1,24 +1,26 @@
 # Use a lightweight Node.js image
 FROM node:20-alpine
 
-# Enable pnpm (since you have pnpm-lock.yaml)
+# Enable pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Set the working directory inside the container
+# Set working directory
 WORKDIR /app
 
-# Copy dependency definitions first (for better caching)
+# Copy dependency files
 COPY package.json pnpm-lock.yaml ./
 
-# Install dependencies using pnpm
+# Install dependencies
 RUN pnpm install
 
-# Copy the rest of your project files (index.html, etc.)
+# Copy the rest of the project
 COPY . .
 
-# Expose port 3000 to the outside world
+# Build the Next.js application
+RUN pnpm run build
+
+# Expose port 3000
 EXPOSE 3000
 
-# Use `npx serve` to serve the current folder on port 3000
-# This works even if your package.json doesn't have a specific start script
-CMD ["npx", "serve", ".", "-l", "3000"]
+# Start the Next.js server
+CMD ["pnpm", "start"]

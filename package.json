@@ -1,16 +1,16 @@
 {
-	"dependencies": {
-		"@grapesjs/studio-sdk": "^1.0.56"
-	},
-	"name": "grapejstest",
-	"version": "1.0.0",
-	"main": "index.js",
-	"devDependencies": {},
-	"scripts": {
-		"test": "echo \"Error: no test specified\" && exit 1"
-	},
-	"keywords": [],
-	"author": "",
-	"license": "ISC",
-	"description": ""
+  "name": "grapesjs-ai-builder",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "@grapesjs/studio-sdk": "latest"
+  }
 }
