@@ -14,11 +14,11 @@ export function useAI(editor) {
 
   // --- HELPER: Execute Tool ---
   const executeTool = (toolName, args, selectedComponent) => {
-    console.log(`🔧 AI Executing Tool: ${toolName}`, args);
+    console.log(`🔧 [DEBUG] Executing Tool: ${toolName}`, args);
     switch (toolName) {
       case 'style_element':
         selectedComponent.addStyle(args.css);
-        return "I've updated the styles for you."; // Return a success message
+        return "I've updated the styles for you."; 
       case 'update_inner_content':
         const cleanContent = DOMPurify.sanitize(args.html, { FORCE_BODY: true, ADD_ATTR: ['style', 'class'] });
         selectedComponent.components(cleanContent);
@@ -33,15 +33,18 @@ export function useAI(editor) {
   };
 
   // --- MAIN FUNCTION ---
-  // We added 'onStreamUpdate' back so your UI updates!
   const generateResponse = async (userText, history, selectedContext, onStreamUpdate, onComplete) => {
-    if (!userText.trim() || !editor) return;
+    console.log("🚀 [DEBUG] generateResponse STARTED");
+    if (!userText.trim() || !editor) {
+        console.warn("⚠️ [DEBUG] Missing userText or Editor");
+        return;
+    }
     
     setIsThinking(true);
 
     const selectedComponent = editor.getSelected();
     
-    // Default system prompt if nothing selected
+    // Default system prompt
     let systemPrompt = "You are a helpful AI web builder assistant.";
     
     if (selectedComponent) {
@@ -58,20 +61,39 @@ export function useAI(editor) {
     }
 
     try {
+      console.log("1. [DEBUG] Sending fetch request...");
+      
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'google/gemini-2.0-flash-exp:free', 
-          messages: [{ role: 'system', content: systemPrompt }, ...history], // Pass history so it remembers "Hi"
+          messages: [{ role: 'system', content: systemPrompt }, ...history], 
           tools: AI_TOOLS,       
           tool_choice: "auto"    
         })
       });
 
+      console.log("2. [DEBUG] Response Status:", response.status);
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.statusText}`);
+      }
+
       const data = await response.json();
+      console.log("3. [DEBUG] Raw API Data:", data);
+
+      // Validate structure
+      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+         console.error("❌ [DEBUG] Unexpected API Structure", data);
+         throw new Error("Invalid API Response Structure");
+      }
+
       const choice = data.choices[0];
       const message = choice.message;
+      
+      console.log("4. [DEBUG] AI Message Content:", message.content);
+      console.log("5. [DEBUG] AI Tool Calls:", message.tool_calls);
 
       let finalUserMessage = "";
 
@@ -80,33 +102,42 @@ export function useAI(editor) {
         if (!selectedComponent) {
             finalUserMessage = "Please select an element on the canvas first so I can modify it.";
         } else {
-            // Execute the tool and get the success message
             for (const toolCall of message.tool_calls) {
               const fnName = toolCall.function.name;
               let fnArgs = {};
               try {
                 fnArgs = JSON.parse(toolCall.function.arguments);
-              } catch (e) { console.error(e); }
+              } catch (e) { console.error("JSON Parse Error", e); }
               
-              // Run it
               finalUserMessage = executeTool(fnName, fnArgs, selectedComponent);
             }
         }
       } 
-      // CASE 2: AI just talked (e.g. "Hi", "What can you do?")
+      // CASE 2: AI just talked
       else if (message.content) {
         finalUserMessage = message.content;
       } else {
-        finalUserMessage = "Done.";
+        console.warn("⚠️ [DEBUG] No content and No tool calls found.");
+        finalUserMessage = "Done (No output).";
       }
 
-      // --- CRITICAL FIX FOR "NOTHING SHOWS" ---
-      // We manually trigger the UI update callbacks
-      if (onStreamUpdate) onStreamUpdate(finalUserMessage);
-      if (onComplete) onComplete(finalUserMessage);
+      console.log("6. [DEBUG] Final Message to UI:", finalUserMessage);
+
+      // Trigger UI updates
+      if (onStreamUpdate) {
+          console.log("7. [DEBUG] Calling onStreamUpdate");
+          onStreamUpdate(finalUserMessage);
+      } else {
+          console.warn("⚠️ [DEBUG] onStreamUpdate is MISSING or undefined");
+      }
+
+      if (onComplete) {
+          console.log("8. [DEBUG] Calling onComplete");
+          onComplete(finalUserMessage);
+      }
 
     } catch (error) {
-      console.error("AI Error:", error);
+      console.error("❌ [DEBUG] CATCH BLOCK:", error);
       const errorMsg = "Sorry, something went wrong.";
       if (onStreamUpdate) onStreamUpdate(errorMsg);
       if (onComplete) onComplete(errorMsg);
