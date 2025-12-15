@@ -21,6 +21,7 @@ export default function Editor({ onReady }) {
               project: { type: 'web' },
               assets: { storageType: 'self' },
               onReady: (editor) => {
+                window.studioEditor = editor;
                 setIsLoaded(true);
                 if (onReady) onReady(editor);
               }
