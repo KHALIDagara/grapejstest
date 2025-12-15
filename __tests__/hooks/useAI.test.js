@@ -77,7 +77,7 @@ describe('useAI Hook', () => {
 
         expect(fetch).toHaveBeenCalled();
         const body = JSON.parse(fetch.mock.calls[0][1].body);
-        expect(body.messages[0].content).toContain('ENTIRE PAGE (Wrapper)');
+        expect(body.messages[0].content).toContain('ENTIRE PAGE (body wrapper)');
     });
 
     test('should execute tool generate_whole_page', async () => {

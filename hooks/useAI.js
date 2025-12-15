@@ -82,6 +82,24 @@ export function useAI() {
         selectedComponent.addClass(args.className);
         return `Class '${args.className}' added.`;
 
+      case 'insert_sibling_before': {
+        const parent = selectedComponent.parent();
+        if (!parent) return "Error: Cannot insert before root element.";
+        const index = parent.components().indexOf(selectedComponent);
+        const cleanSibling = DOMPurify.sanitize(args.component, { FORCE_BODY: true, ADD_ATTR: ['style', 'class'] });
+        parent.append(cleanSibling, { at: index });
+        return "Component inserted before.";
+      }
+
+      case 'insert_sibling_after': {
+        const parent = selectedComponent.parent();
+        if (!parent) return "Error: Cannot insert after root element.";
+        const index = parent.components().indexOf(selectedComponent);
+        const cleanSibling = DOMPurify.sanitize(args.component, { FORCE_BODY: true, ADD_ATTR: ['style', 'class'] });
+        parent.append(cleanSibling, { at: index + 1 });
+        return "Component inserted after.";
+      }
+
       default:
         return "Unknown command.";
     }
@@ -105,23 +123,50 @@ export function useAI() {
     const isWrapper = selectedModel === editor.getWrapper();
 
     let systemPrompt = `
-      You are an expert Web Designer & Developer using GrapesJS.
-      
-      PAGE CONTEXT (Structure):
+      ROLE: You are an AI assistant controlling a GrapesJS visual web editor. You can modify the page by calling tools.
+
+      PAGE STRUCTURE:
       \`\`\`html
       ${getPageContext(editor)}
       \`\`\`
 
-      CURRENT TARGET: ${isWrapper ? "ENTIRE PAGE (Wrapper)" : `<${selectedModel.get('tagName')}>`}
-      ${!isWrapper ? `TARGET HTML: \`\`\`${selectedModel.toHTML()}\`\`\`` : ""}
+      CURRENT SELECTION: ${isWrapper ? "ENTIRE PAGE (body wrapper)" : `<${selectedModel.get('tagName')}> element`}
+      ${!isWrapper ? `SELECTION HTML:\n\`\`\`html\n${selectedModel.toHTML()}\n\`\`\`` : ""}
 
-      User Goal: "${userText}"
+      USER REQUEST: "${userText}"
 
-      GUIDELINES:
-      1. If the user wants a full page (landing page, website), use 'generate_whole_page'.
-      2. If modifying a specific element (button, box), use 'style_element' or 'update_inner_content'.
-      3. Use 'append_component' to add new sections or elements.
-      4. BE VISUAL. Use modern CSS (Flexbox, Grid, rounded corners, good spacing).
+      ---
+      TOOL SELECTION RULES (FOLLOW STRICTLY):
+
+      1.  **To ADD a new element** (image, button, section, etc.) -> Use \`append_component\`.
+          - This inserts a NEW child element at the END of the selected element.
+          - Provide the full HTML for the new component (e.g., \`<img src="..." />\`).
+
+      2.  **To CHANGE existing text or inner structure** -> Use \`update_inner_content\`.
+          - This REPLACES the innerHTML of the selected element.
+          - Use ONLY for text changes or restructuring *inside* the element.
+
+      3.  **To STYLE the selected element** (colors, fonts, spacing, borders) -> Use \`style_element\`.
+          - Provide a JSON object of CSS properties.
+
+      4.  **To DELETE the selected element** -> Use \`delete_component\`.
+
+      5.  **To GENERATE a WHOLE NEW PAGE** (only if user asks for "landing page", "website") -> Use \`generate_whole_page\`.
+
+      ---
+      EXAMPLES:
+      - User: "add an image" -> Call \`append_component\` with \`{ "component": "<img src='https://placehold.co/600x400' alt='Placeholder' style='max-width: 100%; border-radius: 8px;' />" }\`
+      - User: "make this button red" -> Call \`style_element\` with \`{ "css": {"background-color": "red"} }\`
+      - User: "change the title to Welcome" -> Call \`update_inner_content\` with \`{ "html": "Welcome" }\`
+      - User: "delete this section" -> Call \`delete_component\`.
+      - User: "add a header before this" -> Call \`insert_sibling_before\` with \`{ "component": "<h1>Header</h1>" }\`.
+      - User: "add a footer after this" -> Call \`insert_sibling_after\` with \`{ "component": "<footer>Footer content</footer>" }\`.
+
+      IMPORTANT:
+      - Call ONLY ONE tool per response.
+      - Use \`insert_sibling_before\`/\`insert_sibling_after\` when adding elements AS SIBLINGS (before/after), use \`append_component\` when adding elements AS CHILDREN (inside).
+      - Use modern CSS (flexbox, grid, good spacing, rounded corners).
+      - For images, use placeholder URLs like https://placehold.co/600x400 unless the user specifies a URL.
     `;
 
     try {

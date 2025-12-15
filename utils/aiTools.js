@@ -96,5 +96,39 @@ export const AI_TOOLS = [
         required: ["className"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "insert_sibling_before",
+      description: "Insert a NEW component BEFORE the currently selected element (as a sibling, not a child). Use this when the user wants to add something 'above' or 'before' the current selection.",
+      parameters: {
+        type: "object",
+        properties: {
+          component: {
+            type: "string",
+            description: "HTML string of the new component to insert before the selection."
+          }
+        },
+        required: ["component"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "insert_sibling_after",
+      description: "Insert a NEW component AFTER the currently selected element (as a sibling, not a child). Use this when the user wants to add something 'below' or 'after' the current selection.",
+      parameters: {
+        type: "object",
+        properties: {
+          component: {
+            type: "string",
+            description: "HTML string of the new component to insert after the selection."
+          }
+        },
+        required: ["component"]
+      }
+    }
   }
 ];
