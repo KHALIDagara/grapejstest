@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Script from 'next/script';
+import grapesjsTailwind from 'grapesjs-tailwind';
 
 export default function Editor({ onReady, onSelection }) { 
   const [isLoaded, setIsLoaded] = useState(false);
@@ -18,6 +19,22 @@ export default function Editor({ onReady, onSelection }) {
               theme: 'dark',
               project: { type: 'web' },
               assets: { storageType: 'self' },
+              plugins: [
+                {
+                  id: 'grapesjs-tailwind',
+                  src: grapesjsTailwind,
+                  options: {
+                    // Optional: Custom config for the plugin
+                    suggestClasses: true // Enables autocomplete for Tailwind classes
+                  }
+                }
+              ],
+              // 3. Keep the Canvas Script (Required for Visual Rendering)
+              // The plugin handles the UI (dropdowns), but this handles the Rendering.
+              canvas: {
+                scripts: ['https://cdn.tailwindcss.com']
+              },
+             
               onReady: (editor) => {
                 setIsLoaded(true);
                 window.studioEditor = editor; 
