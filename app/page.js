@@ -1,57 +1,60 @@
 'use client';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
 import Editor from '@/components/Editor';
 import { useAI } from '@/hooks/useAI';
 
 export default function Home() {
   const editorRef = useRef(null);
+  const [selectedElement, setSelectedElement] = useState(null); // Context State
   const { messages, isThinking, sendMessage } = useAI();
 
-  // The function that bridges AI -> Editor
+  // --- THE LOGIC SWITCH ---
   const handleAICompletion = (htmlCode) => {
-    if (editorRef.current) {
-      try {
-        console.log("Injecting Code...");
-        editorRef.current.setComponents(htmlCode);
-      } catch (e) {
+    if (!editorRef.current) return;
+    
+    try {
+        if (selectedElement) {
+            // SCENARIO A: Modify Specific Component
+            // 1. Get the currently selected component from the editor
+            const selectedComponent = editorRef.current.getSelected();
+            
+            if (selectedComponent) {
+                console.log("Replacing component:", selectedComponent);
+                // 2. Replace it with the AI's new HTML
+                selectedComponent.replaceWith(htmlCode);
+            } else {
+                console.warn("Selection lost, appending instead.");
+                editorRef.current.addComponents(htmlCode);
+            }
+
+        } else {
+            // SCENARIO B: Global Generation (No selection)
+            console.log("Adding new components to canvas...");
+            editorRef.current.addComponents(htmlCode); 
+            // Note: use addComponents to append, setComponents to overwrite everything
+        }
+    } catch (e) {
         console.error("Editor Injection Failed:", e);
-      }
     }
   };
 
   return (
-    <>
-      <style jsx>{`
-        .main-container {
-          display: flex;
-          height: 100vh;
-          width: 100vw;
-          overflow: hidden;
-          background: black;
-          font-family: sans-serif;
-        }
-        .editor-wrapper {
-          flex: 1;
-          position: relative;
-        }
-      `}</style>
+    <div className="main-layout">
+      
+      <Sidebar 
+        messages={messages} 
+        selectedContext={selectedElement} // Pass context to UI
+        isThinking={isThinking} 
+        // Pass context to Logic
+        onSend={(text) => sendMessage(text, selectedElement, handleAICompletion)} 
+      />
 
-      <div className="main-container">
+      <Editor 
+        onReady={(editor) => { editorRef.current = editor; }} 
+        onSelection={(data) => setSelectedElement(data)} // Update Context
+      />
 
-        {/* 1. The AI Sidebar */}
-        <Sidebar
-          messages={messages}
-          isThinking={isThinking}
-          onSend={(text) => sendMessage(text, handleAICompletion)}
-        />
-
-        {/* 2. The GrapesJS Editor */}
-        <div className="editor-wrapper">
-          <Editor onReady={(editor) => { editorRef.current = editor; }} />
-        </div>
-
-      </div>
-    </>
+    </div>
   );
 }
