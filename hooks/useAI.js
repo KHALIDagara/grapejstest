@@ -1,156 +1,139 @@
 import { useState } from 'react';
 import DOMPurify from 'dompurify';
+import { AI_TOOLS } from '../utils/aiTools'; // Import the tools definition
 
-export function useAI(editor) { // Pass the GrapesJS editor instance
+export function useAI(editor) {
   const [isThinking, setIsThinking] = useState(false);
 
-  // --- 1. CONTEXT GATHERER ---
-  // Grabs the "Vibe" of the page without sending 5000 lines of code
-  const getPageContext = () => {
-    if (!editor) return "No context available.";
-    
-    // Get all text on the page to understand the "Topic" (Yoga, Coffee, Tech?)
-    const pageText = editor.Canvas.getBody().innerText.slice(0, 1000); 
-    
-    // Get a structural map (Simple DOM tree)
-    const wrapper = editor.getWrapper();
-    const structure = wrapper.find('section').map(comp => comp.get('tagName') + (comp.getId() ? `#${comp.getId()}` : '')).join(' > ');
-
-    return `Page Topic: ${pageText.replace(/\n/g, ' ')}\nPage Structure: ${structure}`;
+  // --- HELPER: Get Global Context (Yoga vs Coffee vs Tech) ---
+  const getGlobalContext = () => {
+    if (!editor) return "";
+    // Grab the first 500 chars of text to give the AI a "vibe check"
+    const rawText = editor.Canvas.getBody().innerText.slice(0, 500).replace(/\n/g, ' ');
+    return rawText ? `PAGE CONTEXT (The user is building this): "${rawText}..."` : "";
   };
 
-  // --- 2. EXECUTION ENGINE ---
-  // Applies the JSON instructions deterministically
-  const executeCommand = (command, selectedComponent) => {
-    console.log("AI Command:", command);
+  // --- HELPER: Execute the Tool ---
+  const executeTool = (toolName, args, selectedComponent) => {
+    console.log(`🔧 AI Executing Tool: ${toolName}`, args);
 
-    switch (command.action) {
-      case 'STYLE':
-        // Strict Mode: Apply styles directly to the component model
-        // This guarantees NO HTML wrappers are added
-        selectedComponent.addStyle(command.payload);
+    switch (toolName) {
+      case 'style_element':
+        // STRICT: Applies CSS directly to the model. 
+        // Impossible for AI to break HTML structure here.
+        selectedComponent.addStyle(args.css);
         break;
 
-      case 'UPDATE_CONTENT':
-        // Updates the INNER content (e.g., changing text inside a div)
-        // Keeps the parent wrapper intact
-        const cleanHtml = DOMPurify.sanitize(command.payload, { FORCE_BODY: true });
-        selectedComponent.components(cleanHtml); 
+      case 'update_inner_content':
+        // SAFE: Sanitize and replace ONLY inner content.
+        // Prevents wrapper hallucination.
+        const cleanContent = DOMPurify.sanitize(args.html, { 
+          FORCE_BODY: true,
+          ADD_ATTR: ['style', 'class'] 
+        });
+        selectedComponent.components(cleanContent);
         break;
 
-      case 'INSERT':
-        // Appends a new component inside the selected one
-        const cleanComponent = DOMPurify.sanitize(command.payload, { FORCE_BODY: true });
-        selectedComponent.append(cleanComponent);
+      case 'append_component':
+        // Append new child safely
+        const cleanChild = DOMPurify.sanitize(args.component, { 
+          FORCE_BODY: true,
+          ADD_ATTR: ['style', 'class'] 
+        });
+        selectedComponent.append(cleanChild);
         break;
-        
+
       default:
-        console.warn("Unknown AI Action");
+        console.warn("Unknown tool called:", toolName);
     }
   };
 
-  const generateResponse = async (userText, history, selectedContext, pageTheme, onComplete) => {
-    if (!userText.trim()) return;
-    setIsThinking(true);
-
-    // Get the selected component from GrapesJS directly if possible
-    const selectedComponent = editor.getSelected();
+  const generateResponse = async (userText, onComplete) => {
+    if (!userText.trim() || !editor) return;
     
+    const selectedComponent = editor.getSelected();
     if (!selectedComponent) {
-      setIsThinking(false);
+      alert("Please select an element first.");
       return;
     }
 
-    // Calculate DOM Path (e.g. Body > Section > Div > Button)
-    let domPath = [];
-    let curr = selectedComponent;
-    while(curr && curr !== editor.getWrapper()) {
-        domPath.unshift(curr.get('tagName'));
-        curr = curr.parent();
-    }
-    const pathString = domPath.join(' > ');
+    setIsThinking(true);
 
-    // --- 3. THE SMART PROMPT ---
+    // 1. Construct the System Prompt
+    const tagName = selectedComponent.get('tagName');
+    const currentClasses = selectedComponent.getClasses().join(' ');
+    const globalContext = getGlobalContext();
+    
+    // We send the Current HTML so the AI knows what it's editing, 
+    // BUT we force it to use tools to change it.
+    const currentHtml = selectedComponent.toHTML(); 
+
     const systemPrompt = `
-      ROLE: You are a JSON-based Web Builder Engine.
+      You are an expert Web Builder Assistant using GrapesJS.
+      ${globalContext}
       
-      GLOBAL PAGE CONTEXT:
-      "${getPageContext()}"
-
       CURRENT SELECTION:
-      - Type: <${selectedContext.tagName}>
-      - Location in Page: ${pathString}
-      - Current HTML Content: 
-        \`\`\`html
-        ${selectedContext.currentHTML}
-        \`\`\`
-
-      USER INSTRUCTION: "${userText}"
-
-      LOGIC RULES:
-      1. If the user wants to change colors, fonts, spacing, or alignment -> Use action "STYLE".
-      2. If the user wants to change the text or replace inner elements -> Use action "UPDATE_CONTENT".
-      3. If the user wants to add a NEW element inside this one -> Use action "INSERT".
-
-      RESPONSE FORMAT (STRICT JSON ONLY):
+      - Tag: <${tagName}>
+      - Classes: ${currentClasses}
+      - HTML: \`\`\`${currentHtml}\`\`\`
       
-      If Action is STYLE:
-      {
-        "action": "STYLE",
-        "payload": { "background-color": "#ff0000", "border-radius": "10px", ... }
-      }
-
-      If Action is UPDATE_CONTENT (Refining what is inside):
-      {
-        "action": "UPDATE_CONTENT",
-        "payload": "<h2 style='...'>New Title</h2><p>New text</p>" 
-      }
-      (NOTE: Do NOT include the root tag <${selectedContext.tagName}> in the payload, only what goes INSIDE it.)
-
-      If Action is INSERT (Adding new child):
-      {
-        "action": "INSERT",
-        "payload": "<button style='...'>Click Me</button>"
-      }
-
-      CRITICAL: return ONLY valid JSON. No markdown. No text.
+      USER GOAL: "${userText}"
+      
+      INSTRUCTIONS:
+      1. Analyze the goal. 
+      2. If visual (colors, spacing, layout), use 'style_element'.
+      3. If content (text, inner structure), use 'update_inner_content'.
+      4. If adding new items, use 'append_component'.
+      5. DO NOT output raw markdown or text. CALL A FUNCTION.
     `;
 
     try {
-      // (Using non-streaming request for JSON reliability)
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'google/gemini-2.0-flash-exp:free', // Flash models are great for JSON
-          messages: [
-              { role: 'system', content: systemPrompt }
-              // (History is less relevant for "Commands", but you can add it if needed)
-          ]
+          model: 'google/gemini-2.0-flash-exp:free', // Use a smart model (Gemini 2.0, GPT-4o)
+          messages: [{ role: 'system', content: systemPrompt }],
+          tools: AI_TOOLS,       // <--- Send the strict rules
+          tool_choice: "auto"    // Let AI decide which tool matches
         })
       });
 
-      const data = await response.json(); // Assuming your API returns the full JSON object now
+      const data = await response.json();
       
-      // Parse the AI's "Thought"
-      let aiCommand;
-      try {
-          // Sometimes LLMs wrap JSON in ```json blocks
-          const rawJson = data.content.replace(/```json/g, '').replace(/```/g, '').trim();
-          aiCommand = JSON.parse(rawJson);
-      } catch (e) {
-          console.error("AI returned invalid JSON", data.content);
-          return;
+      // 2. Parse the Response
+      const choice = data.choices[0];
+      const message = choice.message;
+
+      // 3. Check for Tool Calls
+      if (message.tool_calls && message.tool_calls.length > 0) {
+        // The AI might return multiple steps (e.g., style AND update text)
+        for (const toolCall of message.tool_calls) {
+          const fnName = toolCall.function.name;
+          let fnArgs = {};
+          
+          try {
+            fnArgs = JSON.parse(toolCall.function.arguments);
+          } catch (e) {
+            console.error("Failed to parse AI arguments", e);
+            continue;
+          }
+
+          // Execute on GrapesJS
+          executeTool(fnName, fnArgs, selectedComponent);
+        }
+        
+        if (onComplete) onComplete("Changes applied.");
+      } else {
+        // Fallback: AI just talked instead of acting
+        console.warn("AI did not trigger a tool:", message.content);
+        if (onComplete) onComplete(message.content); // Show text to user
       }
 
-      // Execute the deterministic action
-      executeCommand(aiCommand, selectedComponent);
-      
-      setIsThinking(false);
-      if (onComplete) onComplete("Done"); // Notify UI
-
     } catch (error) {
-      console.error(error);
+      console.error("AI Integration Error:", error);
+      if (onComplete) onComplete("Error: " + error.message);
+    } finally {
       setIsThinking(false);
     }
   };
