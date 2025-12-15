@@ -125,18 +125,32 @@ export function useAI() {
     `;
 
     try {
+      const payload = {
+        model: 'google/gemini-2.0-flash-exp:free',
+        messages: [{ role: 'system', content: systemPrompt }, ...history],
+        tools: AI_TOOLS,
+        tool_choice: "auto"
+      };
+
+      console.log("📤 [Client] Sending Payload:", JSON.stringify({
+        ...payload,
+        messages: [
+          ...payload.messages.slice(0, 1), // System prompt
+          { role: '...', content: `(${payload.messages.length - 1} more messages)` }
+        ]
+      }, null, 2));
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'google/gemini-2.0-flash-exp:free',
-          messages: [{ role: 'system', content: systemPrompt }, ...history],
-          tools: AI_TOOLS,
-          tool_choice: "auto"
-        })
+        body: JSON.stringify(payload)
       });
 
-      if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error(`❌ [Client] API Error ${response.status}:`, errText);
+        throw new Error(`API Error: ${response.statusText} - ${errText}`);
+      }
 
       const data = await response.json();
       const choice = data.choices[0];
