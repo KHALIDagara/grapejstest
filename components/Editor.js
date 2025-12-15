@@ -16,7 +16,7 @@ export default function Editor({ onReady }) {
         if (container && container.innerHTML === '') {
             window.GrapesJsStudioSDK.createStudioEditor({
               root: '#studio-editor',
-              licenseKey: process.env.NEXT_PUBLIC_GRAPESJS_LICENSE_KEY || '',
+              licenseKey: process.env.NEXT_PUBLIC_GRAPESJS_LICENSE_KEY,
               theme: 'dark',
               project: { type: 'web' },
               assets: { storageType: 'self' },
