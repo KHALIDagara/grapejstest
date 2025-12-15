@@ -1,138 +1,115 @@
 import { useState } from 'react';
 import DOMPurify from 'dompurify';
-import { AI_TOOLS } from '../utils/aiTools'; // Import the tools definition
+import { AI_TOOLS } from '../utils/aiTools'; 
 
 export function useAI(editor) {
   const [isThinking, setIsThinking] = useState(false);
 
-  // --- HELPER: Get Global Context (Yoga vs Coffee vs Tech) ---
+  // --- HELPER: Context ---
   const getGlobalContext = () => {
     if (!editor) return "";
-    // Grab the first 500 chars of text to give the AI a "vibe check"
     const rawText = editor.Canvas.getBody().innerText.slice(0, 500).replace(/\n/g, ' ');
-    return rawText ? `PAGE CONTEXT (The user is building this): "${rawText}..."` : "";
+    return rawText ? `PAGE CONTEXT: "${rawText}..."` : "";
   };
 
-  // --- HELPER: Execute the Tool ---
+  // --- HELPER: Execute Tool ---
   const executeTool = (toolName, args, selectedComponent) => {
     console.log(`🔧 AI Executing Tool: ${toolName}`, args);
-
     switch (toolName) {
       case 'style_element':
-        // STRICT: Applies CSS directly to the model. 
-        // Impossible for AI to break HTML structure here.
         selectedComponent.addStyle(args.css);
-        break;
-
+        return "I've updated the styles for you."; // Return a success message
       case 'update_inner_content':
-        // SAFE: Sanitize and replace ONLY inner content.
-        // Prevents wrapper hallucination.
-        const cleanContent = DOMPurify.sanitize(args.html, { 
-          FORCE_BODY: true,
-          ADD_ATTR: ['style', 'class'] 
-        });
+        const cleanContent = DOMPurify.sanitize(args.html, { FORCE_BODY: true, ADD_ATTR: ['style', 'class'] });
         selectedComponent.components(cleanContent);
-        break;
-
+        return "I've updated the content.";
       case 'append_component':
-        // Append new child safely
-        const cleanChild = DOMPurify.sanitize(args.component, { 
-          FORCE_BODY: true,
-          ADD_ATTR: ['style', 'class'] 
-        });
+        const cleanChild = DOMPurify.sanitize(args.component, { FORCE_BODY: true, ADD_ATTR: ['style', 'class'] });
         selectedComponent.append(cleanChild);
-        break;
-
+        return "I've added the new component.";
       default:
-        console.warn("Unknown tool called:", toolName);
+        return "I tried to run a command but couldn't understand it.";
     }
   };
 
-  const generateResponse = async (userText, onComplete) => {
+  // --- MAIN FUNCTION ---
+  // We added 'onStreamUpdate' back so your UI updates!
+  const generateResponse = async (userText, history, selectedContext, onStreamUpdate, onComplete) => {
     if (!userText.trim() || !editor) return;
     
-    const selectedComponent = editor.getSelected();
-    if (!selectedComponent) {
-      alert("Please select an element first.");
-      return;
-    }
-
     setIsThinking(true);
 
-    // 1. Construct the System Prompt
-    const tagName = selectedComponent.get('tagName');
-    const currentClasses = selectedComponent.getClasses().join(' ');
-    const globalContext = getGlobalContext();
+    const selectedComponent = editor.getSelected();
     
-    // We send the Current HTML so the AI knows what it's editing, 
-    // BUT we force it to use tools to change it.
-    const currentHtml = selectedComponent.toHTML(); 
-
-    const systemPrompt = `
-      You are an expert Web Builder Assistant using GrapesJS.
-      ${globalContext}
-      
-      CURRENT SELECTION:
-      - Tag: <${tagName}>
-      - Classes: ${currentClasses}
-      - HTML: \`\`\`${currentHtml}\`\`\`
-      
-      USER GOAL: "${userText}"
-      
-      INSTRUCTIONS:
-      1. Analyze the goal. 
-      2. If visual (colors, spacing, layout), use 'style_element'.
-      3. If content (text, inner structure), use 'update_inner_content'.
-      4. If adding new items, use 'append_component'.
-      5. DO NOT output raw markdown or text. CALL A FUNCTION.
-    `;
+    // Default system prompt if nothing selected
+    let systemPrompt = "You are a helpful AI web builder assistant.";
+    
+    if (selectedComponent) {
+        const tagName = selectedComponent.get('tagName');
+        const currentHtml = selectedComponent.toHTML(); 
+        systemPrompt = `
+          You are an expert Web Builder.
+          ${getGlobalContext()}
+          CURRENT SELECTION: <${tagName}>
+          HTML: \`\`\`${currentHtml}\`\`\`
+          USER GOAL: "${userText}"
+          INSTRUCTIONS: Use the provided tools to modify the component.
+        `;
+    }
 
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'google/gemini-2.0-flash-exp:free', // Use a smart model (Gemini 2.0, GPT-4o)
-          messages: [{ role: 'system', content: systemPrompt }],
-          tools: AI_TOOLS,       // <--- Send the strict rules
-          tool_choice: "auto"    // Let AI decide which tool matches
+          model: 'google/gemini-2.0-flash-exp:free', 
+          messages: [{ role: 'system', content: systemPrompt }, ...history], // Pass history so it remembers "Hi"
+          tools: AI_TOOLS,       
+          tool_choice: "auto"    
         })
       });
 
       const data = await response.json();
-      
-      // 2. Parse the Response
       const choice = data.choices[0];
       const message = choice.message;
 
-      // 3. Check for Tool Calls
-      if (message.tool_calls && message.tool_calls.length > 0) {
-        // The AI might return multiple steps (e.g., style AND update text)
-        for (const toolCall of message.tool_calls) {
-          const fnName = toolCall.function.name;
-          let fnArgs = {};
-          
-          try {
-            fnArgs = JSON.parse(toolCall.function.arguments);
-          } catch (e) {
-            console.error("Failed to parse AI arguments", e);
-            continue;
-          }
+      let finalUserMessage = "";
 
-          // Execute on GrapesJS
-          executeTool(fnName, fnArgs, selectedComponent);
+      // CASE 1: AI Used a Tool
+      if (message.tool_calls && message.tool_calls.length > 0) {
+        if (!selectedComponent) {
+            finalUserMessage = "Please select an element on the canvas first so I can modify it.";
+        } else {
+            // Execute the tool and get the success message
+            for (const toolCall of message.tool_calls) {
+              const fnName = toolCall.function.name;
+              let fnArgs = {};
+              try {
+                fnArgs = JSON.parse(toolCall.function.arguments);
+              } catch (e) { console.error(e); }
+              
+              // Run it
+              finalUserMessage = executeTool(fnName, fnArgs, selectedComponent);
+            }
         }
-        
-        if (onComplete) onComplete("Changes applied.");
+      } 
+      // CASE 2: AI just talked (e.g. "Hi", "What can you do?")
+      else if (message.content) {
+        finalUserMessage = message.content;
       } else {
-        // Fallback: AI just talked instead of acting
-        console.warn("AI did not trigger a tool:", message.content);
-        if (onComplete) onComplete(message.content); // Show text to user
+        finalUserMessage = "Done.";
       }
 
+      // --- CRITICAL FIX FOR "NOTHING SHOWS" ---
+      // We manually trigger the UI update callbacks
+      if (onStreamUpdate) onStreamUpdate(finalUserMessage);
+      if (onComplete) onComplete(finalUserMessage);
+
     } catch (error) {
-      console.error("AI Integration Error:", error);
-      if (onComplete) onComplete("Error: " + error.message);
+      console.error("AI Error:", error);
+      const errorMsg = "Sorry, something went wrong.";
+      if (onStreamUpdate) onStreamUpdate(errorMsg);
+      if (onComplete) onComplete(errorMsg);
     } finally {
       setIsThinking(false);
     }
