@@ -18,53 +18,198 @@ export default function Sidebar({ messages, isThinking, onSend }) {
   };
 
   return (
-    <div className={`relative flex flex-col bg-[#1e1e1e] border-r border-[#333] transition-all duration-300 z-10 ${collapsed ? 'w-0' : 'w-[350px]'}`}>
-      
-      {/* Toggle Button */}
-      <button 
-        onClick={() => setCollapsed(!collapsed)}
-        className="absolute -right-10 top-4 w-10 h-10 bg-[#1e1e1e] border border-l-0 border-[#333] rounded-r text-gray-300 flex items-center justify-center hover:text-[#9c27b0]"
-      >
-        {collapsed ? '→' : '←'}
-      </button>
+    <>
+      <style jsx>{`
+        .sidebar {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          background: #1e1e1e;
+          border-right: 1px solid #333;
+          transition: all 0.3s;
+          z-index: 10;
+          width: 350px;
+        }
+        .sidebar.collapsed {
+          width: 0;
+          border: none;
+        }
 
-      <div className={`flex flex-col h-full overflow-hidden transition-opacity ${collapsed ? 'opacity-0' : 'opacity-100'}`}>
-        {/* Header */}
-        <div className="p-4 border-b border-[#333] bg-[#252525] text-white font-bold flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${isThinking ? 'bg-green-400 animate-pulse' : 'bg-gray-500'}`} />
-          AI Designer
-        </div>
+        .toggle-btn {
+          position: absolute;
+          right: -40px;
+          top: 1rem;
+          width: 40px;
+          height: 40px;
+          background: #1e1e1e;
+          border: 1px solid #333;
+          border-left: none;
+          border-radius: 0 8px 8px 0;
+          color: #d1d5db;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+        }
+        .toggle-btn:hover {
+          color: #9c27b0;
+        }
 
-        {/* Chat List */}
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-          {messages.map((msg, i) => (
-            <div key={i} className={`p-3 rounded text-sm max-w-[90%] leading-relaxed ${
-              msg.role === 'user' ? 'bg-[#4a148c] self-end text-white' : 'bg-[#2d2d2d] self-start text-gray-200 border border-[#333]'
-            }`}>
-              {msg.text}
-            </div>
-          ))}
-          <div ref={chatEndRef} />
-        </div>
+        .content {
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          overflow: hidden;
+          transition: opacity 0.2s;
+          opacity: 1;
+        }
+        .content.collapsed {
+          opacity: 0;
+          pointer-events: none;
+        }
 
-        {/* Input */}
-        <div className="p-4 border-t border-[#333] bg-[#252525] flex flex-col gap-2">
-          <textarea 
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSubmit())}
-            placeholder="Describe your layout..."
-            className="w-full h-20 bg-[#1a1a1a] border border-[#444] rounded p-2 text-white focus:outline-none focus:border-[#9c27b0] resize-none"
-          />
-          <button 
-            onClick={handleSubmit} 
-            disabled={isThinking}
-            className="bg-[#9c27b0] text-white py-2 rounded font-bold hover:bg-[#7b1fa2] disabled:bg-[#444] transition-colors"
-          >
-            {isThinking ? 'Building...' : 'Generate'}
-          </button>
+        .header {
+          padding: 1rem;
+          border-bottom: 1px solid #333;
+          background: #252525;
+          color: white;
+          font-weight: bold;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .status-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #6b7280;
+        }
+        .status-dot.active {
+          background: #4ade80;
+          animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.5;
+          }
+        }
+
+        .chat-list {
+          flex: 1;
+          overflow-y: auto;
+          padding: 1rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+
+        .message {
+          padding: 0.75rem;
+          border-radius: 0.375rem;
+          font-size: 14px;
+          max-width: 90%;
+          line-height: 1.625;
+        }
+        .message.user {
+          background: #4a148c;
+          align-self: flex-end;
+          color: white;
+        }
+        .message.bot {
+          background: #2d2d2d;
+          align-self: flex-start;
+          color: #e5e7eb;
+          border: 1px solid #333;
+        }
+
+        .input-area {
+          padding: 1rem;
+          border-top: 1px solid #333;
+          background: #252525;
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+
+        .textarea {
+          width: 100%;
+          height: 80px;
+          background: #1a1a1a;
+          border: 1px solid #444;
+          border-radius: 0.375rem;
+          padding: 0.5rem;
+          color: white;
+          resize: none;
+          font-family: inherit;
+        }
+        .textarea:focus {
+          outline: none;
+          border-color: #9c27b0;
+        }
+
+        .submit-btn {
+          background: #9c27b0;
+          color: white;
+          padding: 0.5rem 0;
+          border-radius: 0.375rem;
+          font-weight: bold;
+          border: none;
+          cursor: pointer;
+          transition: background-color 0.2s;
+        }
+        .submit-btn:hover {
+          background: #7b1fa2;
+        }
+        .submit-btn:disabled {
+          background: #444;
+          cursor: not-allowed;
+        }
+      `}</style>
+
+      <div className={collapsed ? 'sidebar collapsed' : 'sidebar'}>
+
+        {/* Toggle Button */}
+        <button onClick={() => setCollapsed(!collapsed)} className="toggle-btn">
+          {collapsed ? '→' : '←'}
+        </button>
+
+        <div className={collapsed ? 'content collapsed' : 'content'}>
+          {/* Header */}
+          <div className="header">
+            <div className={isThinking ? 'status-dot active' : 'status-dot'} />
+            AI Designer
+          </div>
+
+          {/* Chat List */}
+          <div className="chat-list">
+            {messages.map((msg, i) => (
+              <div key={i} className={msg.role === 'user' ? 'message user' : 'message bot'}>
+                {msg.text}
+              </div>
+            ))}
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* Input */}
+          <div className="input-area">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSubmit())}
+              placeholder="Describe your layout..."
+              className="textarea"
+            />
+            <button onClick={handleSubmit} disabled={isThinking} className="submit-btn">
+              {isThinking ? 'Building...' : 'Generate'}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
