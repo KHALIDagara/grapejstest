@@ -86,7 +86,8 @@ export default function Home() {
             });
         };
 
-        const historyToSend = [...currentHistory, userMsg];
+        // Only send last 2 messages to prevent context pollution from old conversations
+        const historyToSend = [...currentHistory.slice(-2), userMsg];
 
         // --- FIX: Pass editorRef.current as first argument ---
         await generateResponse(
