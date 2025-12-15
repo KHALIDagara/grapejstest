@@ -123,17 +123,25 @@ export function useAI() {
     const isWrapper = selectedModel === editor.getWrapper();
 
     let systemPrompt = `
-      ROLE: You are an AI assistant controlling a GrapesJS visual web editor. You can modify the page by calling tools.
+      ROLE: You are an AI assistant controlling a GrapesJS visual web editor. You execute edits by calling tools.
 
-      PAGE STRUCTURE:
+      =============================================
+      *** CURRENT TARGET (THIS IS WHAT YOU EDIT) ***
+      =============================================
+      Element Type: ${isWrapper ? "ENTIRE PAGE (body wrapper)" : `<${selectedModel.get('tagName')}>`}
+      ${!isWrapper ? `Element ID: ${selectedModel.getId() || 'none'}` : ""}
+      ${!isWrapper ? `Element Classes: ${selectedModel.getClasses().join(' ') || 'none'}` : ""}
+      ${!isWrapper ? `\nElement HTML:\n\`\`\`html\n${selectedModel.toHTML()}\n\`\`\`\n` : ""}
+      =============================================
+
+      PAGE STRUCTURE (for reference):
       \`\`\`html
       ${getPageContext(editor)}
       \`\`\`
 
-      CURRENT SELECTION: ${isWrapper ? "ENTIRE PAGE (body wrapper)" : `<${selectedModel.get('tagName')}> element`}
-      ${!isWrapper ? `SELECTION HTML:\n\`\`\`html\n${selectedModel.toHTML()}\n\`\`\`` : ""}
-
       USER REQUEST: "${userText}"
+
+      *** IMPORTANT: Focus ONLY on the CURRENT TARGET above. Ignore any previous messages about different elements. ***
 
       ---
       TOOL SELECTION RULES (FOLLOW STRICTLY):
@@ -162,11 +170,13 @@ export function useAI() {
       - User: "add a header before this" -> Call \`insert_sibling_before\` with \`{ "component": "<h1>Header</h1>" }\`.
       - User: "add a footer after this" -> Call \`insert_sibling_after\` with \`{ "component": "<footer>Footer content</footer>" }\`.
 
-      IMPORTANT:
+      CRITICAL RULES:
+      - You MUST call a tool. NEVER respond with text explanations.
       - Call ONLY ONE tool per response.
       - Use \`insert_sibling_before\`/\`insert_sibling_after\` when adding elements AS SIBLINGS (before/after), use \`append_component\` when adding elements AS CHILDREN (inside).
       - Use modern CSS (flexbox, grid, good spacing, rounded corners).
       - For images, use placeholder URLs like https://placehold.co/600x400 unless the user specifies a URL.
+      - DO NOT explain what you are doing. Just call the tool.
     `;
 
     try {
