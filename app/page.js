@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Script from 'next/script'; // Next.js optimized script loader
+import Script from 'next/script';
 
 // CONFIGURATION
 const CONFIG = {
-  // ⚠️ REPLACE THIS WITH YOUR ACTUAL KEY
+  // ⚠️ REPLACE WITH YOUR ACTUAL KEY
   apiKey: 'OPENROUTER_API_KEY', 
   siteUrl: 'http://localhost:3000',
   appName: 'GrapesJS AI Builder',
@@ -13,7 +13,7 @@ const CONFIG = {
 };
 
 export default function Home() {
-  const editorRef = useRef(null);      // Stores the Editor Instance
+  const editorRef = useRef(null);
   const [isEditorReady, setEditorReady] = useState(false);
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
   
@@ -23,75 +23,52 @@ export default function Home() {
   ]);
   const [input, setInput] = useState('');
   const [isThinking, setIsThinking] = useState(false);
-  
-  // AI History Memory
   const historyRef = useRef([]);
 
-  // ---------------------------------------------------------
   // 1. Initialize GrapesJS
-  // ---------------------------------------------------------
   useEffect(() => {
-    // We check if the SDK is loaded on the window object
     const initEditor = () => {
       if (window.GrapesJsStudioSDK && !editorRef.current) {
-        console.log('Initializing GrapesJS...');
-        
         window.GrapesJsStudioSDK.createStudioEditor({
           root: '#studio-editor',
-          licenseKey: '', // Leave empty for local dev
+          licenseKey: 'e50c20f9bbf746e4a85e7bd9ebf0faa601ba3461f1864001a90319272a846cbf', 
           theme: 'dark',
           project: { type: 'web' },
           assets: { storageType: 'self' },
           onReady: (editor) => {
             editorRef.current = editor;
             setEditorReady(true);
-            console.log('✅ Editor Ready');
           }
         });
       }
     };
 
-    // Retry mechanism in case script takes a moment to load
     const interval = setInterval(() => {
         if (window.GrapesJsStudioSDK) {
             initEditor();
             clearInterval(interval);
         }
     }, 100);
-
     return () => clearInterval(interval);
   }, []);
 
-
-  // ---------------------------------------------------------
-  // 2. AI Logic (Streaming & Cleaning)
-  // ---------------------------------------------------------
+  // 2. AI Logic
   const handleSendMessage = async () => {
     if (!input.trim()) return;
-
     const userText = input;
     setInput('');
     setIsThinking(true);
 
-    // Add User Message to UI
     setMessages(prev => [...prev, { role: 'user', text: userText }]);
-
-    // Create a placeholder for the Bot's incoming stream
-    setMessages(prev => [...prev, { role: 'bot', text: '' }]);
+    setMessages(prev => [...prev, { role: 'bot', text: '' }]); // Placeholder
 
     const systemPrompt = `
         You are an expert web developer using GrapesJS.
-        1. Output ONLY valid HTML code. No Markdown (no \`\`\`).
+        1. Output ONLY valid HTML code. No Markdown.
         2. No <html>, <head>, or <body> tags. Start with <section>, <div>, etc.
         3. Add 'data-gjs-name="Layer Name"' to major elements.
         4. Use inline styles or <style> tags.
     `;
-
-    const allMessages = [
-        { role: 'system', content: systemPrompt },
-        ...historyRef.current,
-        { role: 'user', content: userText }
-    ];
 
     try {
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -104,7 +81,7 @@ export default function Home() {
             },
             body: JSON.stringify({
                 model: CONFIG.model,
-                messages: allMessages,
+                messages: [{ role: 'system', content: systemPrompt }, ...historyRef.current, { role: 'user', content: userText }],
                 stream: true
             })
         });
@@ -118,7 +95,6 @@ export default function Home() {
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-
             const chunk = decoder.decode(value, { stream: true });
             const lines = chunk.split("\n");
 
@@ -126,34 +102,30 @@ export default function Home() {
                 if (line.trim().startsWith("data: ")) {
                     const jsonStr = line.replace("data: ", "").trim();
                     if (jsonStr === "[DONE]") break;
-                    
                     try {
                         const json = JSON.parse(jsonStr);
                         const content = json.choices[0]?.delta?.content || "";
                         if (content) {
                             fullText += content;
-                            
-                            // Update the last message (the bot placeholder) with new text
                             setMessages(prev => {
                                 const newArr = [...prev];
-                                const lastMsg = newArr[newArr.length - 1];
-                                lastMsg.text = fullText; 
+                                newArr[newArr.length - 1].text = fullText; 
                                 return newArr;
                             });
                         }
-                    } catch (e) { /* ignore partial json */ }
+                    } catch (e) { }
                 }
             }
         }
 
-        // Save to memory
         historyRef.current.push({ role: 'user', content: userText });
         historyRef.current.push({ role: 'assistant', content: fullText });
-
-        // CLEAN & INJECT
         setIsThinking(false);
+
         const cleanCode = fullText.replace(/```html/g, '').replace(/```/g, '').trim();
-        injectCode(cleanCode);
+        if (editorRef.current) {
+            editorRef.current.setComponents(cleanCode);
+        }
 
     } catch (error) {
         setIsThinking(false);
@@ -161,99 +133,118 @@ export default function Home() {
     }
   };
 
-  const injectCode = (html) => {
-    if (editorRef.current) {
-        try {
-            editorRef.current.setComponents(html);
-            console.log("Injecting components...");
-        } catch (e) {
-            console.error("Injection failed", e);
-        }
-    }
-  };
-
-
-  // ---------------------------------------------------------
-  // 3. Render
-  // ---------------------------------------------------------
   return (
     <>
-      {/* Load SDK Style & Script */}
       <link rel="stylesheet" href="https://unpkg.com/@grapesjs/studio-sdk/dist/style.css" />
-      <Script 
-        src="https://unpkg.com/@grapesjs/studio-sdk/dist/index.umd.js" 
-        strategy="lazyOnload"
-      />
+      <Script src="https://unpkg.com/@grapesjs/studio-sdk/dist/index.umd.js" strategy="lazyOnload" />
 
-      <div className="flex h-screen w-screen bg-black text-gray-200 overflow-hidden font-sans">
+      {/* --- CSS STYLES --- */}
+      <style jsx global>{`
+        body { margin: 0; padding: 0; overflow: hidden; background: #111; font-family: sans-serif; }
         
-        {/* --- LEFT SIDEBAR (AI) --- */}
-        <div 
-          className={`relative bg-[#1e1e1e] border-r border-[#333] flex flex-col transition-all duration-300 ease-in-out z-10
-          ${isSidebarCollapsed ? 'w-0 border-none' : 'w-[350px]'}`}
-        >
-          {/* Toggle Button */}
-          <button 
-            onClick={() => setSidebarCollapsed(!isSidebarCollapsed)}
-            className="absolute -right-10 top-4 w-10 h-10 bg-[#1e1e1e] border border-l-0 border-[#333] rounded-r-lg flex items-center justify-center text-gray-300 hover:text-purple-400 cursor-pointer shadow-lg z-20"
-          >
+        .main-container { display: flex; height: 100vh; width: 100vw; }
+        
+        /* SIDEBAR */
+        .ai-sidebar {
+            width: 350px;
+            background: #1e1e1e;
+            border-right: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            transition: width 0.3s ease;
+            z-index: 10;
+        }
+        .ai-sidebar.collapsed { width: 0; border: none; }
+        
+        .ai-content {
+            opacity: 1; transition: opacity 0.2s; display: flex; flex-direction: column; height: 100%; min-width: 350px;
+        }
+        .ai-sidebar.collapsed .ai-content { opacity: 0; pointer-events: none; }
+
+        /* TOGGLE BUTTON */
+        .toggle-btn {
+            position: absolute; right: -40px; top: 15px; width: 40px; height: 40px;
+            background: #1e1e1e; border: 1px solid #333; border-left: none;
+            border-radius: 0 8px 8px 0; cursor: pointer; color: #ddd;
+            display: flex; align-items: center; justify-content: center; font-size: 18px;
+        }
+        .toggle-btn:hover { color: #9c27b0; }
+
+        /* CHAT UI */
+        .header { padding: 15px; background: #252525; border-bottom: 1px solid #333; color: white; font-weight: bold; display: flex; align-items: center; gap: 10px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #666; transition: background 0.3s; }
+        .status-dot.active { background: #00e676; box-shadow: 0 0 8px #00e676; }
+
+        .chat-list { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        
+        .msg { padding: 10px 14px; border-radius: 6px; font-size: 14px; line-height: 1.5; max-width: 90%; color: #ddd; }
+        .msg.bot { background: #2d2d2d; align-self: flex-start; border: 1px solid #333; }
+        .msg.user { background: rgba(156, 39, 176, 0.2); align-self: flex-end; border: 1px solid #9c27b0; color: #fff; }
+
+        .input-area { padding: 15px; background: #252525; border-top: 1px solid #333; display: flex; flex-direction: column; gap: 10px; }
+        textarea {
+            width: 100%; height: 80px; background: #1a1a1a; border: 1px solid #444; color: white; padding: 10px; border-radius: 4px; resize: none; font-family: inherit;
+        }
+        textarea:focus { outline: none; border-color: #9c27b0; }
+
+        .controls { display: flex; justify-content: space-between; align-items: center; }
+        .badge { font-size: 12px; color: #888; background: #333; padding: 3px 6px; border-radius: 4px; }
+        
+        .send-btn {
+            background: #9c27b0; color: white; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer; font-weight: bold;
+        }
+        .send-btn:hover { background: #7b1fa2; }
+        .send-btn:disabled { background: #444; cursor: not-allowed; }
+
+        /* EDITOR */
+        .editor-container { flex: 1; position: relative; background: #000; }
+        #studio-editor { height: 100%; width: 100%; }
+        .loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #666; }
+      `}</style>
+
+      {/* --- MAIN LAYOUT --- */}
+      <div className="main-container">
+        
+        <div className={`ai-sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
+          <button className="toggle-btn" onClick={() => setSidebarCollapsed(!isSidebarCollapsed)}>
             {isSidebarCollapsed ? '→' : '←'}
           </button>
 
-          {/* AI Content */}
-          <div className={`flex flex-col h-full transition-opacity duration-200 ${isSidebarCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-            
-            {/* Header */}
-            <div className="p-4 border-b border-[#333] bg-[#252525] font-semibold flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full transition-colors duration-300 ${isThinking ? 'bg-green-400 animate-pulse' : 'bg-gray-500'}`} />
+          <div className="ai-content">
+            <div className="header">
+              <div className={`status-dot ${isThinking ? 'active' : ''}`} />
               AI Designer
             </div>
 
-            {/* Chat History */}
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+            <div className="chat-list">
               {messages.map((msg, i) => (
-                <div key={i} className={`p-3 rounded-lg text-sm max-w-[95%] leading-relaxed ${
-                    msg.role === 'user' 
-                    ? 'bg-purple-900/30 border border-purple-500/50 self-end text-purple-100' 
-                    : 'bg-[#2d2d2d] border border-[#333] self-start'
-                }`}>
+                <div key={i} className={`msg ${msg.role}`}>
                   {msg.text}
                 </div>
               ))}
             </div>
 
-            {/* Input Area */}
-            <div className="p-4 border-t border-[#333] bg-[#252525] flex flex-col gap-3">
+            <div className="input-area">
               <textarea 
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
                 placeholder="Describe your layout..."
-                className="w-full h-20 p-3 bg-[#1a1a1a] border border-[#444] rounded-md text-white focus:outline-none focus:border-purple-500 resize-none text-sm"
               />
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-500">Gemini Flash 2.0</span>
-                <button 
-                    onClick={handleSendMessage}
-                    disabled={isThinking || !input.trim()}
-                    className={`px-5 py-2 rounded text-sm font-semibold transition-colors 
-                    ${isThinking ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}
-                >
-                  {isThinking ? 'Generating...' : 'Generate'}
+              <div className="controls">
+                <span className="badge">Gemini Flash 2.0</span>
+                <button className="send-btn" onClick={handleSendMessage} disabled={isThinking || !input.trim()}>
+                  {isThinking ? 'Thinking...' : 'Generate'}
                 </button>
               </div>
             </div>
           </div>
         </div>
 
-        {/* --- RIGHT: EDITOR --- */}
-        <div className="flex-1 relative bg-black">
-          {!isEditorReady && (
-            <div className="absolute inset-0 flex items-center justify-center text-gray-500 font-mono">
-              Loading Editor SDK...
-            </div>
-          )}
-          <div id="studio-editor" className="h-full w-full" />
+        <div className="editor-container">
+          {!isEditorReady && <div className="loading">Loading Editor...</div>}
+          <div id="studio-editor"></div>
         </div>
 
       </div>
