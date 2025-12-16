@@ -62,10 +62,20 @@ export default function Editor({ onReady, onSelection, onPageChange, onUpdate, o
         <StudioEditor
           options={{
             licenseKey: process.env.NEXT_PUBLIC_GRAPESJS_LICENSE_KEY || '',
-            root: '#studio-editor', // Important to mount cleanly
+            // root: '#studio-editor', // REMOVED: Managed by React Component
             theme: 'dark',
             project: { type: 'web' },
-            assets: { storageType: 'self' },
+            assets: {
+              storageType: 'self',
+              onUpload: async ({ files }) => {
+                console.log('Assets upload triggered', files);
+                // TODO: Implement actual upload
+                return [];
+              },
+              onDelete: async ({ assets }) => {
+                console.log('Assets delete triggered', assets);
+              }
+            },
             storage: {
               type: 'self',
               autosaveChanges: 100,
