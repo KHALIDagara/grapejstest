@@ -192,28 +192,34 @@ export default function Home() {
     };
 
     // --- 6. Handle GrapesJS Storage Save ---
-    // This is called by the 'supabase' storage adapter in Editor.js
-    const handleGrapesSave = async (projectData, html, css) => {
+    const handleGrapesSave = async (projectData, html, css, pagesData) => {
         if (!currentPage) return;
         const pageId = currentPage.id;
 
-        // Update local store silently to keep it in sync
+        console.log(`[Storage] Saving Page: ${pageId} (${currentPage.name})`);
+        console.log(`[Storage] All Pages captured:`, pagesData?.length);
+
         setPagesStore(prev => {
             const prevPage = prev[pageId];
             if (!prevPage) return prev;
             return {
                 ...prev,
-                [pageId]: { ...prevPage, content: projectData, html, css }
+                [pageId]: {
+                    ...prevPage,
+                    content: projectData,
+                    html,
+                    css,
+                    rendered_pages: pagesData // Store this locally too
+                }
             };
         });
 
-        console.log('Storage Manager saving page:', pageId);
         await savePageData(pageId, {
-            ...pagesStore[pageId], // Careful: state might be stale in callback, but we updated store above. 
-            // Better to use the passed data:
+            ...pagesStore[pageId],
             content: projectData,
             html,
-            css
+            css,
+            rendered_pages: pagesData
         });
     };
 

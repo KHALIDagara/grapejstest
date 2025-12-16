@@ -1,14 +1,20 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import StudioEditor from '@grapesjs/studio-sdk/react';
 import '@grapesjs/studio-sdk/style';
 
 export default function Editor({ onReady, onSelection, onPageChange, onUpdate, onSave }) {
-  const editorInstanceRef = useRef(null);
+  const editorRef = useRef(null);
+  const onSaveRef = useRef(onSave); // Keep track of latest onSave prop
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // Update ref when prop changes
+  useEffect(() => {
+    onSaveRef.current = onSave;
+  }, [onSave]);
+
   const handleReady = (editor) => {
-    editorInstanceRef.current = editor;
+    editorRef.current = editor;
     setIsLoaded(true);
     window.studioEditor = editor; // For debugging/global access if needed
 
@@ -47,7 +53,7 @@ export default function Editor({ onReady, onSelection, onPageChange, onUpdate, o
       if (onSelection) onSelection(null);
     });
 
-    // 4. Update Listener (Optional, usually for visual feedback)
+    // 4. Update Listener
     editor.on('update', () => {
       if (onUpdate) onUpdate();
     });
@@ -81,10 +87,27 @@ export default function Editor({ onReady, onSelection, onPageChange, onUpdate, o
               autosaveChanges: 100,
               autosaveIntervalMs: 10000,
               onSave: async ({ project }) => {
-                if (onSave && editorInstanceRef.current) {
-                  const html = editorInstanceRef.current.getHtml();
-                  const css = editorInstanceRef.current.getCss();
-                  await onSave(project, html, css);
+                if (onSaveRef.current && editorRef.current) {
+                  const editor = editorRef.current;
+
+                  // Capture HTML/CSS for ALL pages
+                  const pages = editor.Pages.getAll();
+                  const pagesData = pages.map(page => {
+                    const component = page.getMainComponent();
+                    return {
+                      id: page.id,
+                      name: page.get('name'),
+                      html: editor.getHtml({ component }),
+                      css: editor.getCss({ component })
+                    };
+                  });
+
+                  // For backward compatibility, also send current page's HTML/CSS as top-level args
+                  // But the structured `pagesData` is what resolves the user's issue.
+                  const currentHtml = editor.getHtml();
+                  const currentCss = editor.getCss();
+
+                  await onSaveRef.current(project, currentHtml, currentCss, pagesData);
                 } else {
                   console.warn('onSave prop missing or editor not ready');
                 }
