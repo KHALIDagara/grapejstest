@@ -1,4 +1,35 @@
 {
-  "node": {},
+  "node": {
+    "4059ac0fab7dbe43a3bbaae57128760cacafdfe674": {
+      "workers": {
+        "app/login/page": {
+          "moduleId": 50281,
+          "async": false,
+          "exportedName": "loginAction",
+          "filename": "app/actions.js"
+        }
+      },
+      "layer": {
+        "app/login/page": "action-browser"
+      },
+      "exportedName": "loginAction",
+      "filename": "app/actions.js"
+    },
+    "400ead121b5c5226f74de9b3eef96a414b79441beb": {
+      "workers": {
+        "app/login/page": {
+          "moduleId": 50281,
+          "async": false,
+          "exportedName": "signupAction",
+          "filename": "app/actions.js"
+        }
+      },
+      "layer": {
+        "app/login/page": "action-browser"
+      },
+      "exportedName": "signupAction",
+      "filename": "app/actions.js"
+    }
+  },
   "edge": {}
 }

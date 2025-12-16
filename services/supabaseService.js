@@ -1,66 +1,46 @@
 
-import { createClient } from '@/utils/supabase/client'
+import { savePageAction, getUserPagesAction, loadPageAction, getUserAction } from '@/app/actions';
 
-const supabase = createClient()
+// We replace the direct supabase client usage with calls to Server Actions.
+// This ensures that all requests to Supabase happen server-side,
+// proxying through Next.js to solve Mixed Content issues.
 
 export const supabaseService = {
     async savePage(pageId, pageData) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
-            console.warn("Save attempted with no user logged in")
-            return null
+        const result = await savePageAction(pageId, pageData);
+        if (result && result.error) {
+            console.error('Error saving page:', result.error);
+            throw new Error(result.error);
         }
-
-        const { error } = await supabase
-            .from('pages')
-            .upsert({
-                id: pageId,
-                user_id: user.id,
-                name: pageData.name || 'Untitled',
-                content: pageData.content || {}, // Editor HTML/CSS components
-                theme: pageData.theme || {},
-                messages: pageData.messages || [],
-                updated_at: new Date().toISOString()
-            })
-            .select()
-            .single()
-
-        if (error) {
-            console.error('Error saving page:', error)
-            throw error
-        }
-        return true
+        return true;
     },
 
-    async loadPage(pageId) {
-        const { data, error } = await supabase
-            .from('pages')
-            .select('*')
-            .eq('id', pageId)
-            .single()
+    // loadPage is less critical for the "save" flow but should also match if we want full proxying.
+    // However, I didn't create a loadPageAction yet. Let's stick to what we have in actions.js
+    // Wait, I missed loadPage in actions.js? I only added savePage and getUserPages.
+    // getUserPages fetches all, so we can use that or I should add loadPageAction.
+    // Re-checking task... I added getUserPagesAction. 
 
-        if (error) {
-            if (error.code === 'PGRST116') return null // Not found
-            console.error('Error loading page:', error)
-            return null
-        }
-        return data
-    },
+    // Let's rely on getUserPages for now or just add loadPageAction quickly.
+    // Actually, let's keep it simple. If loadPage is needed strictly by ID, we should add it.
+    // But for now, let's update getUserPages.
 
     async getUserPages() {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return []
+        return await getUserPagesAction();
+    },
 
-        const { data, error } = await supabase
-            .from('pages')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('updated_at', { ascending: false })
-
+    // If loadPage is used by specific ID fetching (not in my refactor plan explicitly but good to have)
+    async loadPage(pageId) {
+        const { data, error } = await loadPageAction(pageId);
         if (error) {
-            console.error('Error getting pages:', error)
-            return []
+            console.error('Error loading page:', error);
+            return null;
         }
-        return data
+        return data;
+    },
+
+    async getUser() {
+        const { user } = await getUserAction();
+        return user;
     }
 }

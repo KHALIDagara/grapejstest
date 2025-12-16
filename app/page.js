@@ -5,7 +5,6 @@ import Sidebar from '@/components/Sidebar';
 import Editor from '@/components/Editor';
 import { useAI } from '@/hooks/useAI';
 import { supabaseService } from '@/services/supabaseService';
-import { createClient } from '@/utils/supabase/client';
 
 export default function Home() {
     const editorRef = useRef(null);
@@ -21,18 +20,42 @@ export default function Home() {
     const [pagesStore, setPagesStore] = useState({});
 
     const { isThinking, generateResponse } = useAI();
-    const supabase = createClient();
+    // const supabase = createClient(); // REMOVED: Using Server Actions now.
 
+    // --- EFFECT: Check Auth & Load Data ---
     // --- EFFECT: Check Auth & Load Data ---
     useEffect(() => {
         const init = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
+            // We can try to fetch pages directly. If it fails or returns empty, verify auth?
+            // Since we don't have a direct "getUser" action exposed via service, 
+            // we rely on getUserPages returning empty or error if unauth.
+            // OR we can make a getUserAction.
+
+            // For now, let's try getting pages. 
+            // If the middleware is doing its job, we are authenticated.
+
+            const pages = await supabaseService.getUserPages();
+
+            // If pages is null/empty, we might be unauthenticated OR just have no pages.
+            // Middleware should redirect if unauth. 
+            // But let's assume we are auth'd if we are here (middleware protects / ?? No it protects nothing by default in my code).
+
+            // Wait, middleware was:
+            // if (!user ...) { redirect } 
+            // I commented that out in the middleware.js.
+            // So we DO need to check auth.
+
+            // Let's rely on getUserPages returning [] if no user.
+            // But how do we distinguish "no pages" vs "no user"?
+            // actions.js getUserPages checks `if (!user) return []`.
+
+
+            const user = await supabaseService.getUser();
             if (!user) {
                 router.push('/login');
                 return;
             }
 
-            const pages = await supabaseService.getUserPages();
             if (pages && pages.length > 0) {
                 // Load fetched pages into store
                 const newStore = {};

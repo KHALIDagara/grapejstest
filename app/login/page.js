@@ -1,103 +1,184 @@
-
 'use client'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
+import { loginAction, signupAction } from '../actions'
 
 export default function LoginPage() {
-    const [email, setEmail] = useState('')
-    const [password, setPassword] = useState('')
     const [isSignUp, setIsSignUp] = useState(false)
     const [error, setError] = useState(null)
     const [loading, setLoading] = useState(false)
     const router = useRouter()
-    const supabase = createClient()
 
-    const handleAuth = async (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault()
         setLoading(true)
         setError(null)
 
-        try {
-            if (isSignUp) {
-                const { error } = await supabase.auth.signUp({
-                    email,
-                    password,
-                })
-                if (error) throw error
-                // If auto-confirm is on, we might be logged in. 
-                // If not, we might need to check email. 
-                // User said "no email verification", so likely auto-confirmed or optional.
-            } else {
-                const { error } = await supabase.auth.signInWithPassword({
-                    email,
-                    password,
-                })
-                if (error) throw error
-            }
+        const formData = new FormData(e.currentTarget)
 
-            router.push('/')
-            router.refresh()
+        try {
+            const action = isSignUp ? signupAction : loginAction;
+            const result = await action(formData);
+
+            if (result && result.error) {
+                setError(result.error);
+            } else {
+                // Success
+                router.push('/');
+                router.refresh();
+            }
         } catch (err) {
-            setError(err.message)
+            setError(err.message || 'An unexpected error occurred');
         } finally {
-            setLoading(false)
+            setLoading(false);
         }
     }
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-black text-white p-4">
-            <div className="w-full max-w-md p-8 bg-zinc-900 rounded-lg shadow-lg border border-zinc-800">
-                <h1 className="text-2xl font-bold mb-6 text-center">
+        <div className="login-container">
+            <style jsx>{`
+        .login-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #f5f5f5;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .login-box {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #666;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box; /* Critical for padding */
+        }
+        input:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        button[type="submit"] {
+            width: 100%;
+            padding: 12px;
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button[type="submit"]:hover {
+            background-color: #1d4ed8;
+        }
+        button[type="submit"]:disabled {
+            background-color: #93c5fd;
+            cursor: not-allowed;
+        }
+        .error-message {
+            background-color: #fee2e2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .toggle-text {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+        .toggle-btn {
+            background: none;
+            border: none;
+            color: #2563eb;
+            font-weight: 500;
+            cursor: pointer;
+            padding: 0;
+            margin-left: 5px;
+        }
+        .toggle-btn:hover {
+            text-decoration: underline;
+        }
+      `}</style>
+
+            <div className="login-box">
+                <h1 className="title">
                     {isSignUp ? 'Create Account' : 'Welcome Back'}
                 </h1>
 
                 {error && (
-                    <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded text-red-200 text-sm">
+                    <div className="error-message">
                         {error}
                     </div>
                 )}
 
-                <form onSubmit={handleAuth} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium mb-1 text-zinc-400">Email</label>
+                <form onSubmit={handleSubmit}>
+                    <div className="form-group">
+                        <label>Email</label>
                         <input
                             type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            className="w-full p-2 rounded bg-zinc-800 border border-zinc-700 focus:border-blue-500 focus:outline-none transition-colors"
+                            name="email"
                             placeholder="you@example.com"
                             required
                         />
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1 text-zinc-400">Password</label>
+                    <div className="form-group">
+                        <label>Password</label>
                         <input
                             type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="w-full p-2 rounded bg-zinc-800 border border-zinc-700 focus:border-blue-500 focus:outline-none transition-colors"
+                            name="password"
                             placeholder="••••••••"
                             required
+                            minLength={6}
                         />
                     </div>
 
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {loading ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Sign In')}
                     </button>
                 </form>
 
-                <div className="mt-6 text-center text-sm text-zinc-500">
-                    {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+                <div className="toggle-text">
+                    {isSignUp ? 'Already have an account?' : "Don't have an account?"}
                     <button
+                        type="button" // Important: type button so it doesn't submit
                         onClick={() => setIsSignUp(!isSignUp)}
-                        className="text-blue-400 hover:text-blue-300 hover:underline"
+                        className="toggle-btn"
                     >
                         {isSignUp ? 'Sign In' : 'Sign Up'}
                     </button>
