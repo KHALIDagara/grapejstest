@@ -22,17 +22,19 @@ describe('AI Tools Definition', () => {
         expect(tool.function.parameters.required).toContain('className');
     });
 
-    test('search_image should require query parameter', () => {
+    test('search_image should require query and apply_as parameters', () => {
         const tool = AI_TOOLS.find(t => t.function.name === 'search_image');
         expect(tool).toBeDefined();
         expect(tool.function.parameters.required).toContain('query');
+        expect(tool.function.parameters.required).toContain('apply_as');
     });
 
-    test('search_image should have optional color and orientation enums', () => {
+    test('search_image should have valid option enums', () => {
         const tool = AI_TOOLS.find(t => t.function.name === 'search_image');
         expect(tool.function.parameters.properties.color.enum).toContain('blue');
-        expect(tool.function.parameters.properties.color.enum).toContain('red');
         expect(tool.function.parameters.properties.orientation.enum).toContain('landscape');
-        expect(tool.function.parameters.properties.orientation.enum).toContain('portrait');
+        expect(tool.function.parameters.properties.apply_as.enum).toContain('background');
+        expect(tool.function.parameters.properties.apply_as.enum).toContain('img_append');
+        expect(tool.function.parameters.properties.apply_as.enum).toContain('img_replace');
     });
 });

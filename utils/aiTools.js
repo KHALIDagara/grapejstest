@@ -135,13 +135,18 @@ export const AI_TOOLS = [
     type: "function",
     function: {
       name: "search_image",
-      description: "Search for a real, high-quality image from Unsplash. Use this INSTEAD of placeholder URLs when adding images. Returns a real image URL that you can use in append_component, update_inner_content, or generate_whole_page.",
+      description: "Search for a real image from Unsplash AND apply it to the selected element. This tool searches AND applies in one step - no need for a follow-up tool call.",
       parameters: {
         type: "object",
         properties: {
           query: {
             type: "string",
             description: "Search keywords describing the image (e.g., 'sunset beach', 'modern office', 'happy team')"
+          },
+          apply_as: {
+            type: "string",
+            enum: ["background", "img_append", "img_replace"],
+            description: "How to apply the image: 'background' = set as CSS background-image on selected element, 'img_append' = append an <img> tag inside selected element, 'img_replace' = replace selected element's content with an <img> tag"
           },
           color: {
             type: "string",
@@ -154,7 +159,7 @@ export const AI_TOOLS = [
             description: "Optional: Filter images by orientation. Use 'landscape' for wide/banner images, 'portrait' for tall images, 'squarish' for roughly square images."
           }
         },
-        required: ["query"]
+        required: ["query", "apply_as"]
       }
     }
   }

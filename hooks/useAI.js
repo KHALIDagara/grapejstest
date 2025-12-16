@@ -122,15 +122,45 @@ export function useAI() {
 
           const data = await response.json();
 
-          if (data.image) {
-            const img = data.image;
-            console.log('✅ [DEBUG] Found image:', img.url);
-            // Store image info for LLM to use in next tool call
-            return `Found image: URL="${img.url}" | Alt="${img.alt}" | Photo by ${img.photographer} (${img.photographerUrl}). Use this URL in your next component.`;
-          } else {
+          if (!data.image) {
             console.log('⚠️ [DEBUG] No images found for query:', args.query);
-            return `No images found for "${args.query}". Try different keywords or use a placeholder.`;
+            return `No images found for "${args.query}". Try different keywords.`;
           }
+
+          const img = data.image;
+          console.log('✅ [DEBUG] Found image:', img.url);
+
+          // Apply the image based on apply_as parameter
+          const applyAs = args.apply_as || 'img_append';
+
+          switch (applyAs) {
+            case 'background':
+              // Set as CSS background-image
+              selectedComponent.addStyle({
+                'background-image': `url("${img.url}")`,
+                'background-size': 'cover',
+                'background-position': 'center',
+                'background-repeat': 'no-repeat'
+              });
+              console.log('✅ [DEBUG] Applied as background image');
+              return `Background image set. Photo by ${img.photographer}.`;
+
+            case 'img_replace':
+              // Replace content with img tag
+              const replaceHtml = `<img src="${img.url}" alt="${img.alt}" style="max-width: 100%; height: auto; border-radius: 8px;" />`;
+              selectedComponent.components(replaceHtml);
+              console.log('✅ [DEBUG] Replaced content with image');
+              return `Image replaced. Photo by ${img.photographer}.`;
+
+            case 'img_append':
+            default:
+              // Append img tag as child
+              const appendHtml = `<img src="${img.url}" alt="${img.alt}" style="max-width: 100%; height: auto; border-radius: 8px;" />`;
+              selectedComponent.append(appendHtml);
+              console.log('✅ [DEBUG] Appended image');
+              return `Image added. Photo by ${img.photographer}.`;
+          }
+
         } catch (error) {
           console.error('❌ [DEBUG] Image search failed:', error);
           return `Error: ${error.message}. Consider using a placeholder URL.`;
@@ -212,8 +242,9 @@ export function useAI() {
 
       ---
       EXAMPLES:
-      - User: "add an image of a sunset" -> FIRST call \`search_image\` with \`{ "query": "sunset", "orientation": "landscape" }\`. After receiving the URL, call \`append_component\` with the image.
-      - User: "add an image" -> Call \`search_image\` with \`{ "query": "abstract background" }\` to get a real image URL.
+      - User: "add an image of a sunset" -> Call \`search_image\` with \`{ "query": "sunset", "orientation": "landscape", "apply_as": "img_append" }\`.
+      - User: "change this background to a beach" -> Call \`search_image\` with \`{ "query": "beach", "apply_as": "background" }\`.
+      - User: "replace this image with a cat" -> Call \`search_image\` with \`{ "query": "cat", "apply_as": "img_replace" }\`.
       - User: "make this button red" -> Call \`style_element\` with \`{ "css": {"background-color": "red"} }\`
       - User: "change the title to Welcome" -> Call \`update_inner_content\` with \`{ "html": "Welcome" }\`
       - User: "delete this section" -> Call \`delete_component\`.
@@ -223,7 +254,7 @@ export function useAI() {
       CRITICAL RULES:
       - You MUST call a tool. NEVER respond with text explanations.
       - Call ONLY ONE tool per response.
-      - **FOR IMAGES**: Use \`search_image\` to find real images from Unsplash instead of placeholder URLs. Only use placeholder URLs (https://placehold.co/600x400) as a fallback if search_image fails.
+      - **FOR IMAGES**: Use \`search_image\` with the appropriate \`apply_as\` parameter ('background', 'img_append', or 'img_replace') to find AND apply the image in one step.
       - Use \`insert_sibling_before\`/\`insert_sibling_after\` when adding elements AS SIBLINGS (before/after), use \`append_component\` when adding elements AS CHILDREN (inside).
       - When creating new elements, USE THE PAGE THEME colors (Primary Color for buttons/accents, Secondary Color for backgrounds, Font Family for text, Border Radius for corners).
       - DO NOT explain what you are doing. Just call the tool.
