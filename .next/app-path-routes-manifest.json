@@ -1,0 +1,9 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/api/chat/route": "/api/chat",
+  "/api/unsplash/search/route": "/api/unsplash/search",
+  "/auth/callback/route": "/auth/callback",
+  "/login/page": "/login",
+  "/page": "/"
+}

@@ -1,105 +1,191 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import Editor from '@/components/Editor';
 import { useAI } from '@/hooks/useAI';
+import { supabaseService } from '@/services/supabaseService';
+import { createClient } from '@/utils/supabase/client';
 
 export default function Home() {
     const editorRef = useRef(null);
+    const router = useRouter();
+    const [isLoading, setIsLoading] = useState(true);
 
     // 1. Current Transient State
     const [selectedElement, setSelectedElement] = useState(null);
-    const [currentPage, setCurrentPage] = useState({ name: 'Home', id: 'page-1' });
+    const [currentPage, setCurrentPage] = useState(null); // { name, id }
 
     // 2. THE STORE (Dictionary of Pages)
-    const [pagesStore, setPagesStore] = useState({
-        'page-1': {
-            messages: [{ role: 'assistant', content: 'Hello! Editing Home Page.' }],
-            theme: { primaryColor: '#2563eb', secondaryColor: '#ffffff', fontFamily: 'Arial', borderRadius: '4px' }
-        }
-    });
+    // We keep this to switch between pages quickly, but we sync to DB.
+    const [pagesStore, setPagesStore] = useState({});
 
     const { isThinking, generateResponse } = useAI();
+    const supabase = createClient();
+
+    // --- EFFECT: Check Auth & Load Data ---
+    useEffect(() => {
+        const init = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                router.push('/login');
+                return;
+            }
+
+            const pages = await supabaseService.getUserPages();
+            if (pages && pages.length > 0) {
+                // Load fetched pages into store
+                const newStore = {};
+                pages.forEach(p => {
+                    newStore[p.id] = {
+                        messages: p.messages || [],
+                        theme: p.theme || { primaryColor: '#2563eb', secondaryColor: '#ffffff', fontFamily: 'Arial', borderRadius: '4px' },
+                        content: p.content,
+                        name: p.name
+                    };
+                });
+                setPagesStore(newStore);
+                setCurrentPage({ name: pages[0].name, id: pages[0].id });
+            } else {
+                // Create default page? OR let user create.
+                // For now, create a default 'Home' in store (unsaved until edit?)
+                // Or create it in DB immediately.
+                const defaultId = 'page-' + Math.random().toString(36).substr(2, 9);
+                const defaultPage = {
+                    messages: [{ role: 'assistant', content: 'Hello! I created a new project for you.' }],
+                    theme: { primaryColor: '#2563eb', secondaryColor: '#ffffff', fontFamily: 'Arial', borderRadius: '4px' },
+                    content: {},
+                    name: 'Home'
+                };
+                setPagesStore({ [defaultId]: defaultPage });
+                setCurrentPage({ name: 'Home', id: defaultId });
+                // optionally save immediately so it persists
+                supabaseService.savePage(defaultId, defaultPage);
+            }
+            setIsLoading(false);
+        };
+        init();
+    }, [router]);
+
+    // --- SAVE LOGIC (Debounced) ---
+    // We use a simple timeout for debounce
+    const saveTimeoutRef = useRef(null);
+    const savePageData = useCallback((pageId, data) => {
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(async () => {
+            console.log('Saving page...', pageId);
+            await supabaseService.savePage(pageId, data);
+        }, 1000); // 1s debounce
+    }, []);
 
     // --- HELPER: Get Current Page Data ---
     const getCurrentPageData = () => {
-        return pagesStore[currentPage.id] || {
+        if (!currentPage || !pagesStore[currentPage.id]) return {
             messages: [],
             theme: { primaryColor: '#000000', secondaryColor: '#ffffff' }
         };
+        return pagesStore[currentPage.id];
     };
 
     // --- 3. Handle Page Switch ---
     const handlePageChange = (pageInfo) => {
-        if (pageInfo.id === currentPage.id) return;
-        console.log(`Switching Context: ${currentPage.name} -> ${pageInfo.name}`);
-
-        setPagesStore(prev => {
-            if (!prev[pageInfo.id]) {
-                return {
-                    ...prev,
-                    [pageInfo.id]: {
-                        messages: [{ role: 'assistant', content: `Switched to ${pageInfo.name}. Ready to edit.` }],
-                        theme: { primaryColor: '#000000', secondaryColor: '#ffffff' }
-                    }
-                };
-            }
-            return prev;
-        });
+        if (!currentPage || pageInfo.id === currentPage.id) return;
 
         setCurrentPage(pageInfo);
         setSelectedElement(null);
+
+        // Load content into editor
+        const targetPage = pagesStore[pageInfo.id];
+        if (targetPage && editorRef.current && targetPage.content) {
+            // Need to ensure loadProjectData exists on the editor instance
+            // Assuming grapejs studio editor supports it
+            if (editorRef.current.loadProjectData) {
+                editorRef.current.loadProjectData(targetPage.content);
+            }
+        }
     };
 
     // --- 4. Handle Theme Updates ---
     const handleThemeChange = (newTheme) => {
-        setPagesStore(prev => ({
-            ...prev,
-            [currentPage.id]: { ...prev[currentPage.id], theme: newTheme }
-        }));
+        if (!currentPage) return;
+        const pageId = currentPage.id;
+        setPagesStore(prev => {
+            const newList = { ...prev };
+            newList[pageId] = { ...newList[pageId], theme: newTheme };
+            savePageData(pageId, newList[pageId]); // Auto-save
+            return newList;
+        });
     };
 
     // --- 5. Handle AI Logic ---
     const handleSendMessage = async (text) => {
+        if (!currentPage) return;
+        const pageId = currentPage.id;
         const currentData = getCurrentPageData();
-        const currentHistory = currentData.messages;
+        const currentHistory = currentData.messages || [];
         const currentTheme = currentData.theme;
 
         const userMsg = { role: 'user', content: text };
         const placeholderBotMsg = { role: 'assistant', content: '' };
 
-        setPagesStore(prev => ({
-            ...prev,
-            [currentPage.id]: {
-                ...prev[currentPage.id],
+        // Optimistic Update
+        setPagesStore(prev => {
+            const newList = { ...prev };
+            newList[pageId] = {
+                ...newList[pageId],
                 messages: [...currentHistory, userMsg, placeholderBotMsg]
-            }
-        }));
+            };
+            return newList;
+        });
 
         // Update the last message in chat as AI generates/finishes
         const onStreamUpdate = (streamedText) => {
             setPagesStore(prev => {
-                const pageData = prev[currentPage.id];
+                const pageData = prev[pageId];
                 const msgs = [...pageData.messages];
                 msgs[msgs.length - 1] = { role: 'assistant', content: streamedText };
-                return { ...prev, [currentPage.id]: { ...pageData, messages: msgs } };
+                const updatedPage = { ...pageData, messages: msgs };
+                return { ...prev, [pageId]: updatedPage };
             });
         };
 
-        // Only send last 2 messages to prevent context pollution from old conversations
+        // Call AI
         const historyToSend = [...currentHistory.slice(-2), userMsg];
-
-        // --- FIX: Pass editorRef.current as first argument ---
         await generateResponse(
-            editorRef.current, // <--- Editor Instance passed here!
+            editorRef.current,
             text,
             historyToSend,
             selectedElement,
             onStreamUpdate,
-            null, // No completion callback needed, tools handle the DOM
-            currentTheme // Pass theme so AI can use it
+            null,
+            currentTheme
         );
+
+        // Final Save after AI done
+        setPagesStore(prev => {
+            savePageData(pageId, prev[pageId]);
+            return prev;
+        });
     };
+
+    // --- 6. Handle Editor Update ---
+    const handleEditorUpdate = (projectData) => {
+        if (!currentPage) return;
+        const pageId = currentPage.id;
+        setPagesStore(prev => {
+            const prevPage = prev[pageId];
+            if (!prevPage) return prev;
+
+            const updatedPage = { ...prevPage, content: projectData };
+
+            // Trigger save
+            savePageData(pageId, updatedPage);
+
+            return { ...prev, [pageId]: updatedPage };
+        });
+    };
+
+    if (isLoading) return <div className="flex items-center justify-center h-screen bg-black text-white">Loading...</div>;
 
     return (
         <>
@@ -181,9 +267,20 @@ export default function Home() {
                     onSend={handleSendMessage}
                 />
                 <Editor
-                    onReady={(editor) => { editorRef.current = editor; }}
+                    onReady={(editor) => {
+                        editorRef.current = editor;
+                        // On initial ready, load content if we have it
+                        const pageData = getCurrentPageData();
+                        if (pageData && pageData.content) {
+                            // Try to load project data if supported
+                            if (editor.loadProjectData) {
+                                editor.loadProjectData(pageData.content);
+                            }
+                        }
+                    }}
                     onSelection={setSelectedElement}
                     onPageChange={handlePageChange}
+                    onUpdate={handleEditorUpdate}
                 />
             </div>
         </>
