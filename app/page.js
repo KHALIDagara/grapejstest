@@ -42,6 +42,14 @@ export default function Home() {
 
             if (pages && pages.length > 0) {
                 // Load existing pages into store
+                console.log('[Home] Loading pages into store. First page:', {
+                    id: pages[0].id,
+                    name: pages[0].name,
+                    hasContent: !!pages[0].content,
+                    contentType: typeof pages[0].content,
+                    contentKeys: pages[0].content ? Object.keys(pages[0].content) : []
+                });
+
                 const newStore = {};
                 pages.forEach(p => {
                     newStore[p.id] = {
@@ -116,13 +124,30 @@ export default function Home() {
 
     // --- EFFECT: Sync Editor Content ---
     useEffect(() => {
+        console.log('[Sync] Effect triggered:', {
+            isEditorReady,
+            hasEditor: !!editorRef.current,
+            currentPageId: currentPage?.id,
+            hasPageData: !!pagesStore[currentPage?.id]
+        });
+
         if (isEditorReady && editorRef.current && currentPage) {
             const pageData = pagesStore[currentPage.id];
+            console.log('[Sync] Page data:', {
+                pageId: currentPage.id,
+                hasContent: !!pageData?.content,
+                contentKeys: pageData?.content ? Object.keys(pageData.content) : [],
+            });
+
             if (pageData && pageData.content) {
                 if (editorRef.current.loadProjectData) {
                     console.log(`[Sync] Loading content for page ${currentPage.id}`);
                     editorRef.current.loadProjectData(pageData.content);
+                } else {
+                    console.warn('[Sync] loadProjectData method not available');
                 }
+            } else {
+                console.warn('[Sync] No content to load for page', currentPage.id);
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
