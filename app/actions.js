@@ -46,6 +46,12 @@ export async function signupAction(formData) {
 
     if (error) {
         console.error('[SignupAction] Error:', error.message);
+
+        // Specific handling for the "Error sending confirmation email" which causes a 500
+        if (error.message?.includes('Error sending confirmation email') || (error.code === 'unexpected_failure' && error.status === 500)) {
+            return { error: 'Signup Failed: The server tried to send a confirmation email but failed. Please DISABLE "Confirm Email" in your Supabase Auth Settings to fix this.' }
+        }
+
         return { error: error.message }
     }
 
