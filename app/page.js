@@ -24,42 +24,24 @@ export default function Home() {
     // const supabase = createClient(); // REMOVED: Using Server Actions now.
 
     // --- EFFECT: Check Auth & Load Data ---
-    // --- EFFECT: Check Auth & Load Data ---
     useEffect(() => {
         const init = async () => {
-            // We can try to fetch pages directly. If it fails or returns empty, verify auth?
-            // Since we don't have a direct "getUser" action exposed via service, 
-            // we rely on getUserPages returning empty or error if unauth.
-            // OR we can make a getUserAction.
-
-            // For now, let's try getting pages. 
-            // If the middleware is doing its job, we are authenticated.
-
-            const pages = await supabaseService.getUserPages();
-            console.log('[Home] Fetched pages:', pages ? pages.length : 'null');
-
-            // If pages is null/empty, we might be unauthenticated OR just have no pages.
-            // Middleware should redirect if unauth. 
-            // But let's assume we are auth'd if we are here (middleware protects / ?? No it protects nothing by default in my code).
-
-            // Wait, middleware was:
-            // if (!user ...) { redirect } 
-            // I commented that out in the middleware.js.
-            // So we DO need to check auth.
-
-            // Let's rely on getUserPages returning [] if no user.
-            // But how do we distinguish "no pages" vs "no user"?
-            // actions.js getUserPages checks `if (!user) return []`.
-
-
+            // STEP 1: Check authentication FIRST (ensures session is ready)
             const user = await supabaseService.getUser();
             if (!user) {
+                console.log('[Home] No user found, redirecting to login');
                 router.push('/login');
                 return;
             }
 
+            console.log('[Home] User authenticated:', user.id);
+
+            // STEP 2: Fetch user pages AFTER confirming auth (session is now guaranteed to be ready)
+            const pages = await supabaseService.getUserPages();
+            console.log('[Home] Fetched pages:', pages ? pages.length : 0);
+
             if (pages && pages.length > 0) {
-                // Load fetched pages into store
+                // Load existing pages into store
                 const newStore = {};
                 pages.forEach(p => {
                     newStore[p.id] = {
@@ -72,9 +54,8 @@ export default function Home() {
                 setPagesStore(newStore);
                 setCurrentPage({ name: pages[0].name, id: pages[0].id });
             } else {
-                // Create default page? OR let user create.
-                // For now, create a default 'Home' in store (unsaved until edit?)
-                // Or create it in DB immediately.
+                // No existing pages - create default page
+                console.log('[Home] No pages found, creating default page');
                 const defaultId = 'page-' + Math.random().toString(36).substr(2, 9);
                 const defaultPage = {
                     messages: [{ role: 'assistant', content: 'Hello! I created a new project for you.' }],
@@ -84,7 +65,7 @@ export default function Home() {
                 };
                 setPagesStore({ [defaultId]: defaultPage });
                 setCurrentPage({ name: 'Home', id: defaultId });
-                // optionally save immediately so it persists
+                // Save immediately so it persists
                 supabaseService.savePage(defaultId, defaultPage);
             }
             setIsLoading(false);
