@@ -1,96 +1,93 @@
 'use client';
-import { useEffect, useState } from 'react';
-import Script from 'next/script';
+import { useRef, useState } from 'react';
+import StudioEditor from '@grapesjs/studio-sdk/react';
+import '@grapesjs/studio-sdk/style';
 
-export default function Editor({ onReady, onSelection, onPageChange, onUpdate }) {
+export default function Editor({ onReady, onSelection, onPageChange, onUpdate, onSave }) {
+  const editorInstanceRef = useRef(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (window.GrapesJsStudioSDK) {
-        clearInterval(interval);
+  const handleReady = (editor) => {
+    editorInstanceRef.current = editor;
+    setIsLoaded(true);
+    window.studioEditor = editor; // For debugging/global access if needed
 
-        const container = document.getElementById('studio-editor');
-        if (container && container.innerHTML === '') {
+    // --- HELPER: Get Page Info ---
+    const sendPageInfo = () => {
+      const page = editor.Pages.getSelected();
+      if (page && onPageChange) {
+        onPageChange({
+          id: page.id,
+          name: page.get('name') || 'Untitled Page'
+        });
+      }
+    };
 
-          window.GrapesJsStudioSDK.createStudioEditor({
-            root: '#studio-editor',
+    // 1. Send initial page info
+    sendPageInfo();
+
+    // 2. Listen for Page Switches
+    editor.on('page:select', () => {
+      sendPageInfo();
+      if (onSelection) onSelection(null);
+    });
+
+    // 3. Selection Listeners
+    editor.on('component:selected', (model) => {
+      if (!model) return;
+      const elData = {
+        id: model.cid,
+        tagName: model.get('tagName'),
+        currentHTML: model.toHTML()
+      };
+      if (onSelection) onSelection(elData);
+    });
+
+    editor.on('component:deselected', () => {
+      if (onSelection) onSelection(null);
+    });
+
+    // 4. Update Listener (Optional, usually for visual feedback)
+    editor.on('update', () => {
+      if (onUpdate) onUpdate();
+    });
+
+    if (onReady) onReady(editor);
+  };
+
+  return (
+    <div className="editor-area">
+      {!isLoaded && <div className="loading-overlay">Loading Studio SDK...</div>}
+      <div id="studio-editor" style={{ height: '100%' }}>
+        <StudioEditor
+          options={{
             licenseKey: process.env.NEXT_PUBLIC_GRAPESJS_LICENSE_KEY || '',
+            root: '#studio-editor', // Important to mount cleanly
             theme: 'dark',
             project: { type: 'web' },
             assets: { storageType: 'self' },
-
-            onReady: (editor) => {
-              setIsLoaded(true);
-              window.studioEditor = editor;
-
-              // --- HELPER: Get Page Info ---
-              const sendPageInfo = () => {
-                const page = editor.Pages.getSelected();
-
-                // FIX: Check if 'page' exists before accessing .id
-                if (page && onPageChange) {
-                  onPageChange({
-                    id: page.id,
-                    name: page.get('name') || 'Untitled Page'
-                  });
+            storage: {
+              type: 'self',
+              autosaveChanges: 100,
+              autosaveIntervalMs: 10000,
+              onSave: async ({ project }) => {
+                if (onSave && editorInstanceRef.current) {
+                  const html = editorInstanceRef.current.getHtml();
+                  const css = editorInstanceRef.current.getCss();
+                  await onSave(project, html, css);
+                } else {
+                  console.warn('onSave prop missing or editor not ready');
                 }
-              };
-
-              // 1. Send initial page info
-              sendPageInfo();
-
-              // 2. Listen for Page Switches
-              editor.on('page:select', () => {
-                sendPageInfo();
-                // Also clear selection when switching pages
-                if (onSelection) onSelection(null);
-              });
-
-              // 3. Selection Listeners
-              editor.on('component:selected', (model) => {
-                if (!model) return;
-                const elData = {
-                  id: model.cid,
-                  tagName: model.get('tagName'),
-                  currentHTML: model.toHTML()
-                };
-                if (onSelection) onSelection(elData);
-              });
-
-              editor.on('component:deselected', () => {
-                if (onSelection) onSelection(null);
-              });
-
-              // 4. Change Listener for Auto-Save
-              editor.on('update', () => {
-                if (onUpdate) {
-                  // Pass a function to get data to avoid heavy serialization on every event if not needed
-                  // Or just pass the data object
-                  const projectData = editor.getProjectData();
-                  const html = editor.getHtml();
-                  const css = editor.getCss();
-                  onUpdate(projectData, html, css);
-                }
-              });
-
-              if (onReady) onReady(editor);
+              },
+              onLoad: async () => {
+                // We currently load data via loadProjectData separately
+                return {};
+              }
             }
-          });
-        }
-      }
-    }, 100);
-    return () => clearInterval(interval);
-  }, [onReady, onSelection, onPageChange]);
-
-  return (
-    <>
-      <link rel="stylesheet" href="https://unpkg.com/@grapesjs/studio-sdk/dist/style.css" />
-      <Script src="https://unpkg.com/@grapesjs/studio-sdk/dist/index.umd.js" strategy="lazyOnload" />
-      <div className="editor-area">
-        {!isLoaded && <div className="loading-overlay">Loading Studio SDK...</div>}
-        <div id="studio-editor" style={{ height: '100%' }}></div>
+          }}
+          onReady={handleReady}
+        />
       </div>
-    </>
+    </div>
   );
 }

@@ -191,36 +191,42 @@ export default function Home() {
         });
     };
 
-    // --- 6. Handle Editor Update ---
-    const handleEditorUpdate = (projectData, html, css) => {
+    // --- 6. Handle GrapesJS Storage Save ---
+    // This is called by the 'supabase' storage adapter in Editor.js
+    const handleGrapesSave = async (projectData, html, css) => {
         if (!currentPage) return;
         const pageId = currentPage.id;
+
+        // Update local store silently to keep it in sync
         setPagesStore(prev => {
             const prevPage = prev[pageId];
             if (!prevPage) return prev;
-
-            const updatedPage = {
-                ...prevPage,
-                content: projectData,
-                html,
-                css
+            return {
+                ...prev,
+                [pageId]: { ...prevPage, content: projectData, html, css }
             };
+        });
 
-            // Trigger save
-            savePageData(pageId, updatedPage);
-
-            return { ...prev, [pageId]: updatedPage };
+        console.log('Storage Manager saving page:', pageId);
+        await savePageData(pageId, {
+            ...pagesStore[pageId], // Careful: state might be stale in callback, but we updated store above. 
+            // Better to use the passed data:
+            content: projectData,
+            html,
+            css
         });
     };
 
+    // Kept for backward compat or other UI updates if onUpdate is used, 
+    // but Editor.js no longer calls it for saving.
+    const handleEditorUpdate = () => { };
+
     const handleManualSave = () => {
-        if (!currentPage) return;
-        const pageId = currentPage.id;
-        const pageData = pagesStore[pageId];
-        if (pageData) {
-            console.log('Manual save triggered for:', pageId);
-            savePageData(pageId, pageData);
-            alert('Page saved successfully!');
+        if (editorRef.current) {
+            console.log('Triggering manual store...');
+            editorRef.current.store();
+            // The storage adapter will call handleGrapesSave
+            alert('Save triggered!');
         }
     };
 
@@ -321,6 +327,7 @@ export default function Home() {
                     onSelection={setSelectedElement}
                     onPageChange={handlePageChange}
                     onUpdate={handleEditorUpdate}
+                    onSave={handleGrapesSave}
                 />
             </div>
         </>
