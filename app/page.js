@@ -340,6 +340,7 @@ export default function Home() {
                     onPageChange={handlePageChange}
                     onUpdate={handleEditorUpdate}
                     onSave={handleGrapesSave}
+                    initialProjectData={currentPage ? pagesStore[currentPage.id]?.content : null}
                 />
             </div>
         </>

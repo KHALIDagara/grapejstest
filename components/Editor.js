@@ -3,15 +3,20 @@ import { useRef, useState, useEffect } from 'react';
 import StudioEditor from '@grapesjs/studio-sdk/react';
 import '@grapesjs/studio-sdk/style';
 
-export default function Editor({ onReady, onSelection, onPageChange, onUpdate, onSave }) {
+export default function Editor({ onReady, onSelection, onPageChange, onUpdate, onSave, initialProjectData }) {
   const editorRef = useRef(null);
   const onSaveRef = useRef(onSave); // Keep track of latest onSave prop
+  const initialDataRef = useRef(initialProjectData); // Keep track of initial data
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Update ref when prop changes
+  // Update refs when props change
   useEffect(() => {
     onSaveRef.current = onSave;
   }, [onSave]);
+
+  useEffect(() => {
+    initialDataRef.current = initialProjectData;
+  }, [initialProjectData]);
 
   const handleReady = (editor) => {
     editorRef.current = editor;
@@ -113,8 +118,9 @@ export default function Editor({ onReady, onSelection, onPageChange, onUpdate, o
                 }
               },
               onLoad: async () => {
-                // We currently load data via loadProjectData separately
-                return {};
+                // Return initial project data from database (if available)
+                console.log('[Editor] onLoad called, returning initial data:', !!initialDataRef.current);
+                return initialDataRef.current || {};
               }
             }
           }}
