@@ -14,6 +14,7 @@ export default function Home() {
     // 1. Current Transient State
     const [selectedElement, setSelectedElement] = useState(null);
     const [currentPage, setCurrentPage] = useState(null); // { name, id }
+    const [isEditorReady, setIsEditorReady] = useState(false);
 
     // 2. THE STORE (Dictionary of Pages)
     // We keep this to switch between pages quickly, but we sync to DB.
@@ -116,16 +117,7 @@ export default function Home() {
 
         setCurrentPage(pageInfo);
         setSelectedElement(null);
-
-        // Load content into editor
-        const targetPage = pagesStore[pageInfo.id];
-        if (targetPage && editorRef.current && targetPage.content) {
-            // Need to ensure loadProjectData exists on the editor instance
-            // Assuming grapejs studio editor supports it
-            if (editorRef.current.loadProjectData) {
-                editorRef.current.loadProjectData(targetPage.content);
-            }
-        }
+        // Content loading is now handled by the useEffect below
     };
 
     // --- 4. Handle Theme Updates ---
@@ -139,6 +131,20 @@ export default function Home() {
             return newList;
         });
     };
+
+    // --- EFFECT: Sync Editor Content ---
+    useEffect(() => {
+        if (isEditorReady && editorRef.current && currentPage) {
+            const pageData = pagesStore[currentPage.id];
+            if (pageData && pageData.content) {
+                if (editorRef.current.loadProjectData) {
+                    console.log(`[Sync] Loading content for page ${currentPage.id}`);
+                    editorRef.current.loadProjectData(pageData.content);
+                }
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentPage?.id, isEditorReady]);
 
     // --- 5. Handle AI Logic ---
     const handleSendMessage = async (text) => {
@@ -321,14 +327,7 @@ export default function Home() {
                 <Editor
                     onReady={(editor) => {
                         editorRef.current = editor;
-                        // On initial ready, load content if we have it
-                        const pageData = getCurrentPageData();
-                        if (pageData && pageData.content) {
-                            // Try to load project data if supported
-                            if (editor.loadProjectData) {
-                                editor.loadProjectData(pageData.content);
-                            }
-                        }
+                        setIsEditorReady(true);
                     }}
                     onSelection={setSelectedElement}
                     onPageChange={handlePageChange}
