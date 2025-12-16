@@ -29,6 +29,8 @@ create table pages (
   user_id uuid references auth.users not null,
   name text,
   content jsonb default '{}'::jsonb, -- HTML/Styles
+  html text,                         -- Rendered HTML
+  css text,                          -- Rendered CSS
   theme jsonb default '{}'::jsonb,   -- Theme settings
   messages jsonb default '[]'::jsonb,-- Chat history
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,

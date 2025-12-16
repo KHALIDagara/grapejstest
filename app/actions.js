@@ -82,6 +82,8 @@ export async function savePageAction(pageId, pageData) {
             content: pageData.content || {},
             theme: pageData.theme || {},
             messages: pageData.messages || [],
+            html: pageData.html || '',
+            css: pageData.css || '',
             updated_at: new Date().toISOString()
         })
         .select()

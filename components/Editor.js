@@ -68,7 +68,9 @@ export default function Editor({ onReady, onSelection, onPageChange, onUpdate })
                   // Pass a function to get data to avoid heavy serialization on every event if not needed
                   // Or just pass the data object
                   const projectData = editor.getProjectData();
-                  onUpdate(projectData);
+                  const html = editor.getHtml();
+                  const css = editor.getCss();
+                  onUpdate(projectData, html, css);
                 }
               });
 

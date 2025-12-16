@@ -192,20 +192,36 @@ export default function Home() {
     };
 
     // --- 6. Handle Editor Update ---
-    const handleEditorUpdate = (projectData) => {
+    const handleEditorUpdate = (projectData, html, css) => {
         if (!currentPage) return;
         const pageId = currentPage.id;
         setPagesStore(prev => {
             const prevPage = prev[pageId];
             if (!prevPage) return prev;
 
-            const updatedPage = { ...prevPage, content: projectData };
+            const updatedPage = {
+                ...prevPage,
+                content: projectData,
+                html,
+                css
+            };
 
             // Trigger save
             savePageData(pageId, updatedPage);
 
             return { ...prev, [pageId]: updatedPage };
         });
+    };
+
+    const handleManualSave = () => {
+        if (!currentPage) return;
+        const pageId = currentPage.id;
+        const pageData = pagesStore[pageId];
+        if (pageData) {
+            console.log('Manual save triggered for:', pageId);
+            savePageData(pageId, pageData);
+            alert('Page saved successfully!');
+        }
     };
 
     if (isLoading) return <div className="flex items-center justify-center h-screen bg-black text-white">Loading...</div>;
@@ -288,6 +304,7 @@ export default function Home() {
                     onClearContext={() => setSelectedElement(null)}
                     isThinking={isThinking}
                     onSend={handleSendMessage}
+                    onSave={handleManualSave}
                 />
                 <Editor
                     onReady={(editor) => {
