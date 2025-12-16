@@ -25,16 +25,34 @@ export async function loginAction(formData) {
 export async function signupAction(formData) {
     const email = formData.get('email')
     const password = formData.get('password')
+
+    console.log('[SignupAction] Attempting signup for:', email);
+    console.log('[SignupAction] Env check - URL:', process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL);
+
     const cookieStore = await cookies()
     const supabase = createClient(cookieStore)
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+            // If you want to force no email confirmation (only works if enabled in Supabase settings)
+            // data: { ... } 
+        }
     })
 
+    console.log('[SignupAction] Supabase Response Data:', JSON.stringify(data, null, 2));
+    console.log('[SignupAction] Supabase Response Error:', error);
+
     if (error) {
+        console.error('[SignupAction] Error:', error.message);
         return { error: error.message }
+    }
+
+    if (data?.user && !data?.session) {
+        console.log('[SignupAction] User created but no session. Email confirmation likely required.');
+        // We can return a specific message
+        // return { success: true, message: 'Check your email' }
     }
 
     return { success: true }
