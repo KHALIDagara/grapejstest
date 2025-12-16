@@ -130,5 +130,32 @@ export const AI_TOOLS = [
         required: ["component"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_image",
+      description: "Search for a real, high-quality image from Unsplash. Use this INSTEAD of placeholder URLs when adding images. Returns a real image URL that you can use in append_component, update_inner_content, or generate_whole_page.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Search keywords describing the image (e.g., 'sunset beach', 'modern office', 'happy team')"
+          },
+          color: {
+            type: "string",
+            enum: ["black_and_white", "black", "white", "yellow", "orange", "red", "purple", "magenta", "green", "teal", "blue"],
+            description: "Optional: Filter images by dominant color"
+          },
+          orientation: {
+            type: "string",
+            enum: ["landscape", "portrait", "squarish"],
+            description: "Optional: Filter images by orientation. Use 'landscape' for wide/banner images, 'portrait' for tall images, 'squarish' for roughly square images."
+          }
+        },
+        required: ["query"]
+      }
+    }
   }
 ];
