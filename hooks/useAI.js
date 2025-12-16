@@ -54,8 +54,16 @@ export function useAI() {
 
     switch (toolName) {
       case 'style_element':
-        selectedComponent.addStyle(args.css);
-        return "Styles updated.";
+        if (args.recursive) {
+          // Apply to component and all descendants
+          selectedComponent.addStyle(args.css);
+          const descendants = selectedComponent.find('*');
+          descendants.forEach(child => child.addStyle(args.css));
+          return "Styles updated for element and all descendants.";
+        } else {
+          selectedComponent.addStyle(args.css);
+          return "Styles updated.";
+        }
 
       case 'update_inner_content':
         const cleanContent = DOMPurify.sanitize(args.html, { FORCE_BODY: true, ADD_ATTR: ['style', 'class'] });
@@ -255,6 +263,7 @@ export function useAI() {
       - You MUST call a tool. NEVER respond with text explanations.
       - Call ONLY ONE tool per response.
       - **FOR IMAGES**: Use \`search_image\` with the appropriate \`apply_as\` parameter ('background', 'img_append', or 'img_replace') to find AND apply the image in one step.
+      - **FOR STYLING CHILDREN**: If the user asks to "make everything inside white" or "change all fonts", use \`style_element\` with \`recursive: true\`.
       - Use \`insert_sibling_before\`/\`insert_sibling_after\` when adding elements AS SIBLINGS (before/after), use \`append_component\` when adding elements AS CHILDREN (inside).
       - When creating new elements, USE THE PAGE THEME colors (Primary Color for buttons/accents, Secondary Color for backgrounds, Font Family for text, Border Radius for corners).
       - **ALWAYS provide a semantic name** for significant elements (sections, buttons, containers) using the \`data-gjs-name\` attribute. Example: \`<div data-gjs-name="Hero Section">...</div>\`. This helps the user identify components in the layer manager.

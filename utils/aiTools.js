@@ -11,6 +11,10 @@ export const AI_TOOLS = [
             type: "object",
             description: "A JSON object of CSS properties (e.g., {'border-radius': '10px', 'background-color': '#000'})",
             additionalProperties: { type: "string" }
+          },
+          recursive: {
+            type: "boolean",
+            description: "If true, applies the styles to the selected element AND ALL its descendants. Use this when the user says 'make EVERYTHING inside...' or 'change all fonts'."
           }
         },
         required: ["css"]

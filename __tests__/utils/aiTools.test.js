@@ -17,6 +17,13 @@ describe('AI Tools Definition', () => {
         expect(tool.function.parameters.required).toContain('html');
     });
 
+    test('style_element should have css and optional recursive parameters', () => {
+        const tool = AI_TOOLS.find(t => t.function.name === 'style_element');
+        expect(tool.function.parameters.required).toContain('css');
+        expect(tool.function.parameters.properties).toHaveProperty('recursive');
+        expect(tool.function.parameters.properties.recursive.type).toBe('boolean');
+    });
+
     test('add_class should require className parameter', () => {
         const tool = AI_TOOLS.find(t => t.function.name === 'add_class');
         expect(tool.function.parameters.required).toContain('className');
