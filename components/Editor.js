@@ -23,22 +23,40 @@ export default function Editor({ onReady, onSelection, onPageChange, onUpdate, o
     setIsLoaded(true);
     window.studioEditor = editor; // For debugging/global access if needed
 
+    let isInitialLoad = true; // Flag to prevent initial page:select from updating state
+
     // --- HELPER: Get Page Info ---
     const sendPageInfo = () => {
       const page = editor.Pages.getSelected();
       if (page && onPageChange) {
-        onPageChange({
-          id: page.id,
-          name: page.get('name') || 'Untitled Page'
+        console.log('[Editor] sendPageInfo called:', {
+          pageId: page.id,
+          pageName: page.get('name'),
+          isInitialLoad
         });
+
+        // Don't update React state on initial load - let it stay with database page ID
+        if (!isInitialLoad) {
+          onPageChange({
+            id: page.id,
+            name: page.get('name') || 'Untitled Page'
+          });
+        }
       }
     };
 
-    // 1. Send initial page info
-    sendPageInfo();
+    // 1. DON'T send initial page info - keep React state as is
+    // sendPageInfo(); // REMOVED
 
-    // 2. Listen for Page Switches
+    // 2. Listen for Page Switches (but skip the first one)
     editor.on('page:select', () => {
+      if (isInitialLoad) {
+        console.log('[Editor] Ignoring initial page:select event');
+        isInitialLoad = false; // Allow future page switches
+        return;
+      }
+
+      console.log('[Editor] User switched pages');
       sendPageInfo();
       if (onSelection) onSelection(null);
     });
