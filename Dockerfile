@@ -17,11 +17,15 @@ ARG NEXT_PUBLIC_OPENROUTER_API_KEY
 ARG NEXT_PUBLIC_SITE_URL
 ARG NEXT_PUBLIC_AI_MODEL
 ARG NEXT_PUBLIC_GRAPESJS_LICENSE_KEY
+ARG SUPABASE_URL
+ARG SUPABASE_ANON_KEY
 ARG OPENROUTER_API_KEY
 
 # We write them to a .env.production file inside the container before building
 # This ensures Next.js "sees" them during the build process
 RUN echo "NEXT_PUBLIC_OPENROUTER_API_KEY=$NEXT_PUBLIC_OPENROUTER_API_KEY" >> .env.production
+RUN echo "SUPABASE_URL=$SUPABASE_URL" >> .env.production
+RUN echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" >> .env.production
 RUN echo "NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL" >> .env.production
 RUN echo "NEXT_PUBLIC_AI_MODEL=$NEXT_PUBLIC_AI_MODEL" >> .env.production
 RUN echo "NEXT_PUBLIC_GRAPESJS_LICENSE_KEY=$NEXT_PUBLIC_GRAPESJS_LICENSE_KEY" >> .env.production
