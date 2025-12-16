@@ -9,9 +9,13 @@ export async function updateSession(request) {
         },
     })
 
+    // Use NEXT_PUBLIC vars if available, else fallback to standard vars (server-side only)
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+
     const supabase = createServerClient(
-        process.env.SUPABASE_URL,
-        process.env.SUPABASE_ANON_KEY,
+        supabaseUrl,
+        supabaseKey,
         {
             cookies: {
                 getAll() {
@@ -37,21 +41,6 @@ export async function updateSession(request) {
     const {
         data: { user },
     } = await supabase.auth.getUser()
-
-    // NOTE: This is where we could redirect if not authenticated, 
-    // but we might want to allow public access to some pages or handle it in page.
-    /*
-    if (
-      !user &&
-      !request.nextUrl.pathname.startsWith('/login') &&
-      !request.nextUrl.pathname.startsWith('/auth')
-    ) {
-      // no user, potentially redirect to login
-      const url = request.nextUrl.clone()
-      url.pathname = '/login'
-      return NextResponse.redirect(url)
-    }
-    */
 
     return supabaseResponse
 }
