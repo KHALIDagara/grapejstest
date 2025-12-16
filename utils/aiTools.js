@@ -38,13 +38,13 @@ export const AI_TOOLS = [
     type: "function",
     function: {
       name: "append_component",
-      description: "Insert a NEW component (like a button, image, or text) *inside* the selected element at the very end of its children.",
+      description: "Insert a NEW component (like a button, image, or text) *inside* the selected element at the very end of its children. IMPORTANT: Include 'data-gjs-name=\"My Component Name\"' in the HTML to give it a clear name in the Layer Manager.",
       parameters: {
         type: "object",
         properties: {
           component: {
             type: "string",
-            description: "HTML string of the new component to add."
+            description: "HTML string of the new component to add. Example: '<div data-gjs-name=\"Hero Section\">...</div>'"
           }
         },
         required: ["component"]
@@ -55,13 +55,13 @@ export const AI_TOOLS = [
     type: "function",
     function: {
       name: "generate_whole_page",
-      description: "Replaces the ENTIRE page content with new HTML. Use this ONLY when the user asks to 'generate a landing page', 'create a website', or completely clear and rebuild the page.",
+      description: "Replaces the ENTIRE page content with new HTML. Use this ONLY when the user asks to 'generate a landing page', 'create a website', or completely clear and rebuild the page. IMPORTANT: Use 'data-gjs-name' on main sections.",
       parameters: {
         type: "object",
         properties: {
           html: {
             type: "string",
-            description: "The complete HTML structure for the new page body."
+            description: "The complete HTML structure. Main sections should have naming like <section data-gjs-name=\"Testimonials\">..."
           }
         },
         required: ["html"]
@@ -101,13 +101,13 @@ export const AI_TOOLS = [
     type: "function",
     function: {
       name: "insert_sibling_before",
-      description: "Insert a NEW component BEFORE the currently selected element (as a sibling, not a child). Use this when the user wants to add something 'above' or 'before' the current selection.",
+      description: "Insert a NEW component BEFORE the currently selected element (as a sibling). Use 'data-gjs-name' for semantic naming.",
       parameters: {
         type: "object",
         properties: {
           component: {
             type: "string",
-            description: "HTML string of the new component to insert before the selection."
+            description: "HTML string of the new component. Example: '<div data-gjs-name=\"Feature\">...</div>'"
           }
         },
         required: ["component"]
@@ -118,13 +118,13 @@ export const AI_TOOLS = [
     type: "function",
     function: {
       name: "insert_sibling_after",
-      description: "Insert a NEW component AFTER the currently selected element (as a sibling, not a child). Use this when the user wants to add something 'below' or 'after' the current selection.",
+      description: "Insert a NEW component AFTER the currently selected element (as a sibling). Use 'data-gjs-name' for semantic naming.",
       parameters: {
         type: "object",
         properties: {
           component: {
             type: "string",
-            description: "HTML string of the new component to insert after the selection."
+            description: "HTML string of the new component. Example: '<div data-gjs-name=\"Contact Form\">...</div>'"
           }
         },
         required: ["component"]

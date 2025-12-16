@@ -257,6 +257,7 @@ export function useAI() {
       - **FOR IMAGES**: Use \`search_image\` with the appropriate \`apply_as\` parameter ('background', 'img_append', or 'img_replace') to find AND apply the image in one step.
       - Use \`insert_sibling_before\`/\`insert_sibling_after\` when adding elements AS SIBLINGS (before/after), use \`append_component\` when adding elements AS CHILDREN (inside).
       - When creating new elements, USE THE PAGE THEME colors (Primary Color for buttons/accents, Secondary Color for backgrounds, Font Family for text, Border Radius for corners).
+      - **ALWAYS provide a semantic name** for significant elements (sections, buttons, containers) using the \`data-gjs-name\` attribute. Example: \`<div data-gjs-name="Hero Section">...</div>\`. This helps the user identify components in the layer manager.
       - DO NOT explain what you are doing. Just call the tool.
     `;
 
