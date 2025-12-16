@@ -36,6 +36,7 @@ export default function Home() {
             // If the middleware is doing its job, we are authenticated.
 
             const pages = await supabaseService.getUserPages();
+            console.log('[Home] Fetched pages:', pages ? pages.length : 'null');
 
             // If pages is null/empty, we might be unauthenticated OR just have no pages.
             // Middleware should redirect if unauth. 

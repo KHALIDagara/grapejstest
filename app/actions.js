@@ -119,7 +119,10 @@ export async function getUserPagesAction() {
     const supabase = createClient(cookieStore)
 
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return []
+    if (!user) {
+        console.error('[getUserPagesAction] No user found');
+        return []
+    }
 
     const { data, error } = await supabase
         .from('pages')
@@ -132,6 +135,7 @@ export async function getUserPagesAction() {
         return []
     }
 
+    console.log(`[getUserPagesAction] Found ${data.length} pages for user ${user.id}`);
     return data
 }
 
