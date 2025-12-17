@@ -146,3 +146,65 @@ export async function getUserAction() {
     if (error || !user) return { user: null }
     return { user }
 }
+
+export async function getTemplatesAction(options = {}) {
+    const cookieStore = await cookies()
+    const supabase = createClient(cookieStore)
+
+    let query = supabase
+        .from('templates')
+        .select('*')
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+
+    // Filter by category if provided
+    if (options.category) {
+        query = query.eq('category', options.category)
+    }
+
+    // Filter by tags if provided (contains any of the tags)
+    if (options.tags && Array.isArray(options.tags)) {
+        query = query.overlaps('tags', options.tags)
+    }
+
+    // Apply limit if provided, default to 20
+    const limit = options.limit || 20
+    query = query.limit(limit)
+
+    const { data, error } = await query
+
+    if (error) {
+        console.error('[getTemplatesAction] Error:', error)
+        return { data: null, error: error.message }
+    }
+
+    return { data, error: null }
+}
+
+export async function searchTemplatesAction(query) {
+    if (!query || query.trim() === '') {
+        return { data: null, error: 'Query is required' }
+    }
+
+    const cookieStore = await cookies()
+    const supabase = createClient(cookieStore)
+
+    // Use ILIKE for case-insensitive fuzzy search on name and description
+    // The % wildcards allow matching anywhere in the string
+    const searchPattern = `%${query}%`
+
+    const { data, error } = await supabase
+        .from('templates')
+        .select('*')
+        .eq('is_active', true)
+        .or(`name.ilike.${searchPattern},description.ilike.${searchPattern}`)
+        .order('updated_at', { ascending: false })
+        .limit(20)
+
+    if (error) {
+        console.error('[searchTemplatesAction] Error:', error)
+        return { data: null, error: error.message }
+    }
+
+    return { data: data || [], error: null }
+}

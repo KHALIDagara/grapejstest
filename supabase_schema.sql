@@ -55,6 +55,51 @@ create policy "Users can delete own pages."
   on pages for delete
   using ( auth.uid() = user_id );
 
+-- TEMPLATES (Public Gallery)
+create table templates (
+  id text primary key,
+  name text not null,
+  description text,
+  content jsonb default '{}'::jsonb,  -- GrapesJS project data
+  html text,                           -- Rendered HTML output
+  css text,                            -- Rendered CSS styles
+  theme jsonb default '{}'::jsonb,     -- Theme settings (primaryColor, secondaryColor, fontFamily, borderRadius)
+  tags text[] default array[]::text[], -- Array of tags for categorization
+  category text,                       -- Main category (e.g., 'business', 'portfolio', 'landing')
+  thumbnail_html text,                 -- Simplified HTML for preview rendering
+  is_active boolean default true,      -- Soft delete flag
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Enable RLS for templates table
+alter table templates enable row level security;
+
+-- Public read-only access (anyone can view templates)
+create policy "Templates are viewable by everyone."
+  on templates for select
+  using ( is_active = true );
+
+-- Only authenticated users can insert templates (for admin/seed scripts)
+create policy "Authenticated users can insert templates."
+  on templates for insert
+  with check ( auth.role() = 'authenticated' );
+
+-- Only authenticated users can update templates
+create policy "Authenticated users can update templates."
+  on templates for update
+  using ( auth.role() = 'authenticated' );
+
+-- Create indexes for performance
+create index templates_name_trgm_idx on templates using gin (name gin_trgm_ops);
+create index templates_description_trgm_idx on templates using gin (description gin_trgm_ops);
+create index templates_tags_idx on templates using gin (tags);
+create index templates_category_idx on templates (category);
+create index templates_is_active_idx on templates (is_active);
+
+-- Enable pg_trgm extension for fuzzy text search (if not already enabled)
+create extension if not exists pg_trgm;
+
 -- Function to handle new user signup (optional, for profiles)
 create or replace function public.handle_new_user()
 returns trigger
