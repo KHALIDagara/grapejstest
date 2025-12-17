@@ -7,77 +7,61 @@ import { useAI } from '@/hooks/useAI';
 import { supabaseService } from '@/services/supabaseService';
 
 export default function Home() {
+    // We use a ref to access the Editor's imperative methods (addPage, getEditor)
     const editorRef = useRef(null);
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(true);
 
-    // 1. Current Transient State
+    // 1. Current State
     const [selectedElement, setSelectedElement] = useState(null);
     const [currentPage, setCurrentPage] = useState(null); // { name, id }
     const [isEditorReady, setIsEditorReady] = useState(false);
 
-    // 2. THE STORE (Dictionary of Pages)
-    // We keep this to switch between pages quickly, but we sync to DB.
+    // 2. THE STORE (Local cache of page metadata/messages)
     const [pagesStore, setPagesStore] = useState({});
 
-    // Track when we should reload project data (not just on GrapesJS page switches)
-    const shouldReloadProjectRef = useRef(true); // True on initial load
-    const lastLoadedPageIdRef = useRef(null);
-
     const { isThinking, generateResponse } = useAI();
-    // const supabase = createClient(); // REMOVED: Using Server Actions now.
 
-    // --- EFFECT: Check Auth & Load Data ---
+    // --- EFFECT: Check Auth & Load Initial Data ---
     useEffect(() => {
         const init = async () => {
-            // STEP 1: Check authentication FIRST (ensures session is ready)
             const user = await supabaseService.getUser();
             if (!user) {
-                console.log('[Home] No user found, redirecting to login');
+                console.log('[Home] No user found, redirecting');
                 router.push('/login');
                 return;
             }
 
-            console.log('[Home] User authenticated:', user.id);
-
-            // STEP 2: Fetch user pages AFTER confirming auth (session is now guaranteed to be ready)
+            console.log('[Home] User authenticated');
             const pages = await supabaseService.getUserPages();
-            console.log('[Home] Fetched pages:', pages ? pages.length : 0);
 
             if (pages && pages.length > 0) {
                 // Load existing pages into store
-                console.log('[Home] Loading pages into store. First page:', {
-                    id: pages[0].id,
-                    name: pages[0].name,
-                    hasContent: !!pages[0].content,
-                    contentType: typeof pages[0].content,
-                    contentKeys: pages[0].content ? Object.keys(pages[0].content) : []
-                });
-
+                // We assume the first page in the list is the "active" one for initial load
+                const latestPage = pages[0];
+                
                 const newStore = {};
                 pages.forEach(p => {
                     newStore[p.id] = {
                         messages: p.messages || [],
-                        theme: p.theme || { primaryColor: '#2563eb', secondaryColor: '#ffffff', fontFamily: 'Arial', borderRadius: '4px' },
+                        theme: p.theme || { primaryColor: '#2563eb', secondaryColor: '#ffffff' },
                         content: p.content,
                         name: p.name
                     };
                 });
                 setPagesStore(newStore);
-                setCurrentPage({ name: pages[0].name, id: pages[0].id });
+                setCurrentPage({ name: latestPage.name, id: latestPage.id });
             } else {
-                // No existing pages - create default page
-                console.log('[Home] No pages found, creating default page');
-                const defaultId = 'page-' + Math.random().toString(36).substr(2, 9);
+                // No existing pages - create default
+                const defaultId = 'page-home-' + Math.random().toString(36).substr(2, 5);
                 const defaultPage = {
                     messages: [{ role: 'assistant', content: 'Hello! I created a new project for you.' }],
-                    theme: { primaryColor: '#2563eb', secondaryColor: '#ffffff', fontFamily: 'Arial', borderRadius: '4px' },
+                    theme: { primaryColor: '#2563eb', secondaryColor: '#ffffff' },
                     content: {},
                     name: 'Home'
                 };
                 setPagesStore({ [defaultId]: defaultPage });
                 setCurrentPage({ name: 'Home', id: defaultId });
-                // Save immediately so it persists
                 supabaseService.savePage(defaultId, defaultPage);
             }
             setIsLoading(false);
@@ -86,64 +70,73 @@ export default function Home() {
     }, [router]);
 
     // --- SAVE LOGIC (Debounced) ---
-    // We use a simple timeout for debounce
     const saveTimeoutRef = useRef(null);
     const savePageData = useCallback((pageId, data) => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         saveTimeoutRef.current = setTimeout(async () => {
-            console.log('Saving page...', pageId);
+            console.log('Saving page to DB...', pageId);
             await supabaseService.savePage(pageId, data);
-        }, 1000); // 1s debounce
+        }, 1000); 
     }, []);
-
-    // --- HELPER: Get Current Page Data ---
-    const getCurrentPageData = () => {
-        if (!currentPage || !pagesStore[currentPage.id]) return {
-            messages: [],
-            theme: { primaryColor: '#000000', secondaryColor: '#ffffff' }
-        };
-        return pagesStore[currentPage.id];
-    };
 
     // --- 3. Handle Page Switch ---
     const handlePageChange = (pageInfo) => {
-        if (!currentPage || pageInfo.id === currentPage.id) return;
-
+        // This is called when GrapesJS switches pages internally
+        // OR when we rename a page.
+        
+        console.log('[Home] Page updated/switched:', pageInfo);
+        
+        // Just update UI state. DO NOT RELOAD EDITOR CONTENT.
         setCurrentPage(pageInfo);
         setSelectedElement(null);
-        // Content loading is now handled by the useEffect below
+
+        // If the name changed, update the store immediately
+        setPagesStore(prev => {
+            if (prev[pageInfo.id] && prev[pageInfo.id].name !== pageInfo.name) {
+                const updated = { ...prev };
+                updated[pageInfo.id] = { ...updated[pageInfo.id], name: pageInfo.name };
+                // Also trigger a save for the rename
+                savePageData(pageInfo.id, updated[pageInfo.id]);
+                return updated;
+            }
+            return prev;
+        });
     };
 
     // --- 4. Handle Theme Updates ---
     const handleThemeChange = (newTheme) => {
         if (!currentPage) return;
-        const pageId = currentPage.id;
         setPagesStore(prev => {
             const newList = { ...prev };
-            newList[pageId] = { ...newList[pageId], theme: newTheme };
-            savePageData(pageId, newList[pageId]); // Auto-save
+            if (newList[currentPage.id]) {
+                newList[currentPage.id] = { ...newList[currentPage.id], theme: newTheme };
+                savePageData(currentPage.id, newList[currentPage.id]); 
+            }
             return newList;
         });
     };
 
-    // --- 4.5 Handle Template Selection ---
+    // --- 4.5 Handle Template Selection (FIXED) ---
     const handleSelectTemplate = async (template) => {
-        console.log('[Template] ========== TEMPLATE SELECTION STARTED ==========');
-        console.log('[Template] User selected template:', template.name);
-        console.log('[Template] Template data:', {
-            hasContent: !!template.content,
-            contentKeys: template.content ? Object.keys(template.content) : [],
-            hasTheme: !!template.theme,
-            hasHtml: !!template.html,
-            hasCss: !!template.css
-        });
+        if (!editorRef.current) return;
 
-        // Generate new page ID
-        const newPageId = 'page-' + Math.random().toString(36).substr(2, 9);
+        console.log('[Template] Adding new page from template:', template.name);
 
-        // Create new page with template data
-        const newPage = {
-            messages: [],
+        // 1. Add page to LIVE editor. DO NOT wipe existing pages.
+        // returns { id, name } of the newly created page
+        const newPageInfo = editorRef.current.addPage(template);
+
+        if (!newPageInfo) {
+            console.error('Failed to add page via editor ref');
+            return;
+        }
+
+        console.log('[Template] Page created in editor:', newPageInfo);
+
+        // 2. Create the page data structure for our React Store/DB
+        // Note: we use the ID generated by GrapesJS to ensure sync
+        const newPageData = {
+            messages: [], // Fresh chat history for new page
             theme: template.theme || {
                 primaryColor: '#2563eb',
                 secondaryColor: '#ffffff',
@@ -151,98 +144,37 @@ export default function Home() {
                 borderRadius: '4px'
             },
             content: template.content || {},
-            name: template.name,
+            name: newPageInfo.name,
             html: template.html || '',
             css: template.css || ''
         };
 
-        console.log('[Template] Creating new page:', {
-            id: newPageId,
-            name: newPage.name,
-            hasContent: !!newPage.content,
-            hasTheme: !!newPage.theme
-        });
+        // 3. Update React Store
+        setPagesStore(prev => ({
+            ...prev,
+            [newPageInfo.id]: newPageData
+        }));
 
-        // Add to store FIRST
-        setPagesStore(prev => {
-            const updated = {
-                ...prev,
-                [newPageId]: newPage
-            };
-            console.log('[Template] Updated pagesStore. Total pages:', Object.keys(updated).length);
-            return updated;
-        });
+        // 4. Update Current Page State (UI)
+        setCurrentPage({ name: newPageInfo.name, id: newPageInfo.id });
 
-        // CRITICAL: Save immediately to database so it persists
-        console.log('[Template] Saving new page to database immediately...');
-        try {
-            await supabaseService.savePage(newPageId, newPage);
-            console.log('[Template] Page saved to database successfully');
-        } catch (error) {
-            console.error('[Template] Error saving page:', error);
+        // 5. Persist to DB immediately
+        await supabaseService.savePage(newPageInfo.id, newPageData);
+        
+        // 6. Force a GrapesJS save to ensure the project JSON (holding the new page list) is synced
+        // This ensures if the user refreshes, the new page exists in the project data
+        if (editorRef.current.getEditor) {
+             editorRef.current.getEditor().store();
         }
-
-        // Set flag to reload project data (since this is a NEW database page)
-        shouldReloadProjectRef.current = true;
-
-        // Switch to new page (will trigger editor load via useEffect)
-        console.log('[Template] Switching to new page:', newPageId);
-        setCurrentPage({ name: newPage.name, id: newPageId });
-
-        console.log('[Template] ========== TEMPLATE SELECTION COMPLETE ==========');
     };
-
-    // --- EFFECT: Sync Editor Content ---
-    useEffect(() => {
-        console.log('[Sync] Effect triggered:', {
-            isEditorReady,
-            hasEditor: !!editorRef.current,
-            currentPageId: currentPage?.id,
-            hasPageData: !!pagesStore[currentPage?.id],
-            shouldReloadProject: shouldReloadProjectRef.current,
-            lastLoadedPageId: lastLoadedPageIdRef.current
-        });
-
-        if (isEditorReady && editorRef.current && currentPage) {
-            const pageData = pagesStore[currentPage.id];
-
-            // Only reload project if:
-            // 1. It's a different database page than last loaded, OR
-            // 2. shouldReloadProject flag is set (e.g., template selection)
-            const isDifferentDatabasePage = lastLoadedPageIdRef.current !== currentPage.id;
-
-            if (isDifferentDatabasePage && shouldReloadProjectRef.current) {
-                console.log('[Sync] Page data:', {
-                    pageId: currentPage.id,
-                    hasContent: !!pageData?.content,
-                    contentKeys: pageData?.content ? Object.keys(pageData.content) : [],
-                });
-
-                if (pageData && pageData.content) {
-                    if (editorRef.current.loadProjectData) {
-                        console.log(`[Sync] Loading content for DATABASE page ${currentPage.id}`);
-                        editorRef.current.loadProjectData(pageData.content);
-                        lastLoadedPageIdRef.current = currentPage.id;
-                        shouldReloadProjectRef.current = false; // Reset flag
-                    } else {
-                        console.warn('[Sync] loadProjectData method not available');
-                    }
-                } else {
-                    console.warn('[Sync] No content to load for page', currentPage.id);
-                    lastLoadedPageIdRef.current = currentPage.id;
-                }
-            } else {
-                console.log('[Sync] Skipping project reload (GrapesJS internal page switch)');
-            }
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentPage?.id, isEditorReady]);
 
     // --- 5. Handle AI Logic ---
     const handleSendMessage = async (text) => {
-        if (!currentPage) return;
+        if (!currentPage || !editorRef.current) return;
         const pageId = currentPage.id;
-        const currentData = getCurrentPageData();
+        
+        // Safely get current page data or default
+        const currentData = pagesStore[pageId] || { messages: [], theme: {} };
         const currentHistory = currentData.messages || [];
         const currentTheme = currentData.theme;
 
@@ -252,6 +184,9 @@ export default function Home() {
         // Optimistic Update
         setPagesStore(prev => {
             const newList = { ...prev };
+            // Ensure page exists in store
+            if (!newList[pageId]) newList[pageId] = { ...currentData };
+            
             newList[pageId] = {
                 ...newList[pageId],
                 messages: [...currentHistory, userMsg, placeholderBotMsg]
@@ -259,32 +194,33 @@ export default function Home() {
             return newList;
         });
 
-        // Update the last message in chat as AI generates/finishes
         const onStreamUpdate = (streamedText) => {
             setPagesStore(prev => {
+                if (!prev[pageId]) return prev;
                 const pageData = prev[pageId];
                 const msgs = [...pageData.messages];
                 msgs[msgs.length - 1] = { role: 'assistant', content: streamedText };
-                const updatedPage = { ...pageData, messages: msgs };
-                return { ...prev, [pageId]: updatedPage };
+                return { ...prev, [pageId]: { ...pageData, messages: msgs } };
             });
         };
 
-        // Call AI
-        const historyToSend = [...currentHistory.slice(-2), userMsg];
+        // Call AI using the underlying GrapesJS editor instance
+        // We use the getter from the ref
+        const editorInstance = editorRef.current.getEditor ? editorRef.current.getEditor() : null;
+
         await generateResponse(
-            editorRef.current,
+            editorInstance,
             text,
-            historyToSend,
+            [...currentHistory.slice(-2), userMsg],
             selectedElement,
             onStreamUpdate,
             null,
             currentTheme
         );
 
-        // Final Save after AI done
+        // Final Save after AI
         setPagesStore(prev => {
-            savePageData(pageId, prev[pageId]);
+            if (prev[pageId]) savePageData(pageId, prev[pageId]);
             return prev;
         });
     };
@@ -292,49 +228,53 @@ export default function Home() {
     // --- 6. Handle GrapesJS Storage Save ---
     const handleGrapesSave = async (projectData, html, css, pagesData) => {
         if (!currentPage) return;
-        const pageId = currentPage.id;
-
-        console.log(`[Storage] Saving Page: ${pageId} (${currentPage.name})`);
-        console.log(`[Storage] All Pages captured:`, pagesData?.length);
-
+        
+        // We save the project data to the current page row.
+        // In a "Single Row Project" model, this works perfectly.
+        // In a "Multi Row Page" model, this saves the whole project structure 
+        // into the 'content' field of the current page.
+        
+        // Important: Update store with latest HTML/CSS/Content
         setPagesStore(prev => {
-            const prevPage = prev[pageId];
+            const prevPage = prev[currentPage.id];
             if (!prevPage) return prev;
             return {
                 ...prev,
-                [pageId]: {
+                [currentPage.id]: {
                     ...prevPage,
                     content: projectData,
                     html,
-                    css,
-                    rendered_pages: pagesData // Store this locally too
+                    css
                 }
             };
         });
 
-        await savePageData(pageId, {
-            ...pagesStore[pageId],
+        // Trigger DB save
+        savePageData(currentPage.id, {
+            ...pagesStore[currentPage.id],
             content: projectData,
             html,
-            css,
-            rendered_pages: pagesData
+            css
         });
+        
+        // Optional: If we want to sync other pages metadata (like if names changed)
+        // we could loop through pagesData and update other rows, but for now 
+        // saving the current active one is sufficient for persistence.
     };
 
-    // Kept for backward compat or other UI updates if onUpdate is used, 
-    // but Editor.js no longer calls it for saving.
-    const handleEditorUpdate = () => { };
-
+    // Helper for manual save button
     const handleManualSave = () => {
-        if (editorRef.current) {
+        if (editorRef.current && editorRef.current.getEditor) {
             console.log('Triggering manual store...');
-            editorRef.current.store();
-            // The storage adapter will call handleGrapesSave
-            alert('Save triggered!');
+            editorRef.current.getEditor().store();
+            alert('Saved!');
         }
     };
 
-    if (isLoading) return <div className="flex items-center justify-center h-screen bg-black text-white">Loading...</div>;
+    if (isLoading) return <div className="flex items-center justify-center h-screen bg-black text-white">Loading Project...</div>;
+
+    // Initial data for the editor (only used on first mount)
+    const initialData = currentPage && pagesStore[currentPage.id] ? pagesStore[currentPage.id].content : null;
 
     return (
         <>
@@ -488,9 +428,9 @@ export default function Home() {
 
             <div className="main-layout">
                 <Sidebar
-                    key={currentPage?.id || 'no-page'}
-                    messages={getCurrentPageData().messages}
-                    currentTheme={getCurrentPageData().theme}
+                    key={currentPage?.id || 'init'} // Force re-render of sidebar when page changes to update chat context
+                    messages={pagesStore[currentPage?.id]?.messages || []}
+                    currentTheme={pagesStore[currentPage?.id]?.theme}
                     onThemeChange={handleThemeChange}
                     currentPage={currentPage}
                     selectedContext={selectedElement}
@@ -501,15 +441,15 @@ export default function Home() {
                     onSelectTemplate={handleSelectTemplate}
                 />
                 <Editor
+                    ref={editorRef} // Pass ref to access addPage/getEditor
                     onReady={(editor) => {
-                        editorRef.current = editor;
                         setIsEditorReady(true);
                     }}
                     onSelection={setSelectedElement}
                     onPageChange={handlePageChange}
-                    onUpdate={handleEditorUpdate}
+                    onUpdate={() => {}}
                     onSave={handleGrapesSave}
-                    initialProjectData={currentPage ? pagesStore[currentPage.id]?.content : null}
+                    initialProjectData={initialData}
                 />
             </div>
         </>

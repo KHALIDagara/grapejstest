@@ -1,15 +1,16 @@
 'use client';
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useImperativeHandle, forwardRef } from 'react';
 import StudioEditor from '@grapesjs/studio-sdk/react';
 import '@grapesjs/studio-sdk/style';
 
-export default function Editor({ onReady, onSelection, onPageChange, onUpdate, onSave, initialProjectData }) {
+// Use forwardRef to expose editor methods to the parent
+const Editor = forwardRef(({ onReady, onSelection, onPageChange, onUpdate, onSave, initialProjectData }, ref) => {
   const editorRef = useRef(null);
-  const onSaveRef = useRef(onSave); // Keep track of latest onSave prop
-  const initialDataRef = useRef(initialProjectData); // Keep track of initial data
+  const onSaveRef = useRef(onSave);
+  const initialDataRef = useRef(initialProjectData);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Update refs when props change
+  // Keep refs updated
   useEffect(() => {
     onSaveRef.current = onSave;
   }, [onSave]);
@@ -18,47 +19,87 @@ export default function Editor({ onReady, onSelection, onPageChange, onUpdate, o
     initialDataRef.current = initialProjectData;
   }, [initialProjectData]);
 
+  // Expose methods to parent via ref
+  useImperativeHandle(ref, () => ({
+    // Get direct access to editor instance if needed
+    getEditor: () => editorRef.current,
+
+    // THE FIX: Dedicated method to add a page without wiping the project
+    addPage: (templateData) => {
+      const editor = editorRef.current;
+      if (!editor) return null;
+
+      console.log('[Editor] addPage called for template:', templateData.name);
+
+      // 1. Extract content. Templates might be full projects ({ pages: [...] }) or just component trees.
+      let pageContent = {};
+      if (templateData.content) {
+        if (templateData.content.pages && templateData.content.pages.length > 0) {
+          // It's a project export, take the first page
+          pageContent = templateData.content.pages[0];
+        } else {
+          // It's raw component data
+          pageContent = templateData.content;
+        }
+      }
+
+      // 2. Add new page to GrapesJS
+      // Explicitly set the name from the template to prevent "Untitled"
+      const newPage = editor.Pages.add({
+        ...pageContent,
+        name: templateData.name || 'New Page',
+        // Let GrapesJS generate a unique ID to ensure no conflicts
+        id: undefined 
+      });
+
+      // 3. Select the new page immediately
+      editor.Pages.select(newPage);
+
+      // 4. Return new ID and Name for React state sync
+      return {
+        id: newPage.getId(),
+        name: newPage.getName()
+      };
+    },
+
+    // Optional: Load data (destructive) - only used on initial load now
+    loadProjectData: (data) => {
+      if (editorRef.current) {
+        editorRef.current.loadProjectData(data);
+      }
+    }
+  }));
+
   const handleReady = (editor) => {
     editorRef.current = editor;
     setIsLoaded(true);
-    window.studioEditor = editor; // For debugging/global access if needed
+    window.studioEditor = editor; // For debugging
 
-    let isInitialLoad = true; // Flag to prevent initial page:select from updating state
-
-    // --- HELPER: Get Page Info ---
-    const sendPageInfo = () => {
+    // 1. Listen for Page Switches
+    editor.on('page:select', () => {
       const page = editor.Pages.getSelected();
       if (page && onPageChange) {
-        console.log('[Editor] sendPageInfo called:', {
-          pageId: page.id,
-          pageName: page.get('name'),
-          isInitialLoad
+        console.log('[Editor] Page switched internally to:', page.getName(), page.getId());
+        
+        // Notify parent of the switch so it can update UI (Sidebar title, etc.)
+        // WITHOUT triggering a data reload
+        onPageChange({
+          id: page.getId(),
+          name: page.getName() || 'Untitled Page'
         });
-
-        // Don't update React state on initial load - let it stay with database page ID
-        if (!isInitialLoad) {
-          onPageChange({
-            id: page.id,
-            name: page.get('name') || 'Untitled Page'
-          });
-        }
       }
-    };
-
-    // 1. DON'T send initial page info - keep React state as is
-    // sendPageInfo(); // REMOVED
-
-    // 2. Listen for Page Switches (but skip the first one)
-    editor.on('page:select', () => {
-      if (isInitialLoad) {
-        console.log('[Editor] Ignoring initial page:select event');
-        isInitialLoad = false; // Allow future page switches
-        return;
-      }
-
-      console.log('[Editor] User switched pages');
-      sendPageInfo();
+      // Clear selection on page switch
       if (onSelection) onSelection(null);
+    });
+
+    // 2. Listen for Page Renames (Fixes "Untitled" persistence issue)
+    editor.on('page:update:name', (page) => {
+       if (page === editor.Pages.getSelected() && onPageChange) {
+           onPageChange({
+               id: page.getId(),
+               name: page.getName()
+           });
+       }
     });
 
     // 3. Selection Listeners
@@ -91,19 +132,14 @@ export default function Editor({ onReady, onSelection, onPageChange, onUpdate, o
         <StudioEditor
           options={{
             licenseKey: process.env.NEXT_PUBLIC_GRAPESJS_LICENSE_KEY || '',
-            // root: '#studio-editor', // REMOVED: Managed by React Component
             theme: 'dark',
             project: { type: 'web' },
             assets: {
               storageType: 'self',
               onUpload: async ({ files }) => {
                 console.log('Assets upload triggered', files);
-                // TODO: Implement actual upload
                 return [];
               },
-              onDelete: async ({ assets }) => {
-                console.log('Assets delete triggered', assets);
-              }
             },
             storage: {
               type: 'self',
@@ -112,32 +148,26 @@ export default function Editor({ onReady, onSelection, onPageChange, onUpdate, o
               onSave: async ({ project }) => {
                 if (onSaveRef.current && editorRef.current) {
                   const editor = editorRef.current;
-
-                  // Capture HTML/CSS for ALL pages
+                  
+                  // Capture metadata for ALL pages to keep DB updated
                   const pages = editor.Pages.getAll();
                   const pagesData = pages.map(page => {
                     const component = page.getMainComponent();
                     return {
-                      id: page.id,
-                      name: page.get('name'),
+                      id: page.getId(),
+                      name: page.getName(),
+                      // Optional: grab HTML/CSS if needed for thumbnails
                       html: editor.getHtml({ component }),
                       css: editor.getCss({ component })
                     };
                   });
 
-                  // For backward compatibility, also send current page's HTML/CSS as top-level args
-                  // But the structured `pagesData` is what resolves the user's issue.
-                  const currentHtml = editor.getHtml();
-                  const currentCss = editor.getCss();
-
-                  await onSaveRef.current(project, currentHtml, currentCss, pagesData);
-                } else {
-                  console.warn('onSave prop missing or editor not ready');
+                  await onSaveRef.current(project, editor.getHtml(), editor.getCss(), pagesData);
                 }
               },
               onLoad: async () => {
-                // Return initial project data from database (if available)
-                console.log('[Editor] onLoad called, returning initial data:', !!initialDataRef.current);
+                // Load initial data if provided (only runs once on mount)
+                console.log('[Editor] onLoad triggered');
                 return initialDataRef.current || {};
               }
             }
@@ -147,4 +177,7 @@ export default function Editor({ onReady, onSelection, onPageChange, onUpdate, o
       </div>
     </div>
   );
-}
+});
+
+Editor.displayName = 'Editor';
+export default Editor;
