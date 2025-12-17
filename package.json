@@ -2,17 +2,20 @@
   "name": "grapesjs-ai-builder",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "jest"
+    "test": "jest",
+    "seed:templates": "node scripts/seed-templates.js"
   },
   "dependencies": {
     "@grapesjs/studio-sdk": "latest",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.87.3",
     "dompurify": "^3.3.1",
+    "dotenv": "^17.2.3",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest"

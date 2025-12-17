@@ -122,6 +122,47 @@ export default function Home() {
         });
     };
 
+    // --- 4.5 Handle Template Selection ---
+    const handleSelectTemplate = (template) => {
+        console.log('[Template] User selected template:', template.name);
+
+        // Generate new page ID
+        const newPageId = 'page-' + Math.random().toString(36).substr(2, 9);
+
+        // Create new page with template data
+        const newPage = {
+            messages: [],
+            theme: template.theme || {
+                primaryColor: '#2563eb',
+                secondaryColor: '#ffffff',
+                fontFamily: 'Arial',
+                borderRadius: '4px'
+            },
+            content: template.content || {},
+            name: template.name,
+            html: template.html || '',
+            css: template.css || ''
+        };
+
+        console.log('[Template] Creating new page:', {
+            id: newPageId,
+            name: newPage.name,
+            hasContent: !!newPage.content,
+            hasTheme: !!newPage.theme
+        });
+
+        // Add to store
+        setPagesStore(prev => ({
+            ...prev,
+            [newPageId]: newPage
+        }));
+
+        // Switch to new page (will trigger editor load via useEffect)
+        setCurrentPage({ name: newPage.name, id: newPageId });
+
+        console.log('[Template] Template loaded. Page will be saved on manual save or auto-save.');
+    };
+
     // --- EFFECT: Sync Editor Content ---
     useEffect(() => {
         console.log('[Sync] Effect triggered:', {
@@ -312,7 +353,89 @@ export default function Home() {
         .chat-input { background: #2a2a2a; border: 1px solid #444; color: white; padding: 10px; border-radius: 6px; min-height: 60px; resize: vertical; }
         .send-btn { background: #2563eb; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; }
         .send-btn:disabled { background: #444; }
-        
+
+        /* === TEMPLATES GALLERY === */
+        .templates-gallery {
+            display: flex; flex-direction: column; height: 100%; overflow: hidden;
+        }
+        .templates-search {
+            padding: 15px; border-bottom: 1px solid #333;
+        }
+        .templates-search-input {
+            width: 100%; background: #2a2a2a; border: 1px solid #444; color: white;
+            padding: 10px; border-radius: 6px; font-size: 14px;
+        }
+        .templates-search-input:focus {
+            outline: none; border-color: #2563eb;
+        }
+
+        .templates-loading, .templates-searching, .templates-error, .templates-empty {
+            display: flex; align-items: center; justify-content: center;
+            padding: 40px 20px; color: #666; font-size: 14px;
+        }
+        .templates-error { color: #ef4444; }
+
+        .templates-grid {
+            flex: 1; overflow-y: auto; padding: 15px;
+            display: grid; grid-template-columns: 1fr;
+            gap: 15px;
+        }
+
+        /* Template Card */
+        .template-card {
+            background: #252525; border: 1px solid #333; border-radius: 8px;
+            overflow: hidden; transition: border-color 0.2s;
+        }
+        .template-card:hover {
+            border-color: #2563eb;
+        }
+
+        .template-preview {
+            width: 100%; height: 180px; background: #1a1a1a;
+            position: relative; overflow: hidden;
+            border-bottom: 1px solid #333;
+        }
+        .template-iframe {
+            width: 100%; height: 100%; border: none;
+            pointer-events: none;
+        }
+        .template-placeholder {
+            display: flex; align-items: center; justify-content: center;
+            height: 100%; color: #666; font-size: 12px;
+        }
+
+        .template-info {
+            padding: 12px;
+        }
+        .template-name {
+            font-size: 14px; font-weight: 600; color: #fff;
+            margin: 0 0 6px 0;
+        }
+        .template-description {
+            font-size: 12px; color: #999; margin: 0 0 10px 0;
+            line-height: 1.4; display: -webkit-box;
+            -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .template-tags {
+            display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;
+        }
+        .template-tag {
+            font-size: 10px; background: #333; color: #aaa;
+            padding: 4px 8px; border-radius: 4px;
+        }
+
+        .template-select-btn {
+            width: 100%; background: #2563eb; color: white;
+            border: none; padding: 10px; border-radius: 6px;
+            font-size: 13px; font-weight: 600; cursor: pointer;
+            transition: background 0.2s;
+        }
+        .template-select-btn:hover {
+            background: #1d4ed8;
+        }
+
         /* Editor */
         .editor-area { flex: 1; background: #000; position: relative; }
         .loading-overlay { position: absolute; inset: 0; background: #000; color: #666; display: flex; align-items: center; justify-content: center; }
@@ -330,6 +453,7 @@ export default function Home() {
                     isThinking={isThinking}
                     onSend={handleSendMessage}
                     onSave={handleManualSave}
+                    onSelectTemplate={handleSelectTemplate}
                 />
                 <Editor
                     onReady={(editor) => {
