@@ -488,6 +488,7 @@ export default function Home() {
 
             <div className="main-layout">
                 <Sidebar
+                    key={currentPage?.id || 'no-page'}
                     messages={getCurrentPageData().messages}
                     currentTheme={getCurrentPageData().theme}
                     onThemeChange={handleThemeChange}

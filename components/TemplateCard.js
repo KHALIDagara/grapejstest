@@ -43,8 +43,12 @@ export default function TemplateCard({ template, onSelect }) {
     }, [template.thumbnail_html]);
 
     const handleSelect = () => {
+        console.log('[TemplateCard] Button clicked!', template.name);
         if (onSelect) {
+            console.log('[TemplateCard] Calling onSelect');
             onSelect(template);
+        } else {
+            console.error('[TemplateCard] onSelect is undefined!');
         }
     };
 
