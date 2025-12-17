@@ -56,7 +56,11 @@ export default function TemplateCard({ template, onSelect }) {
     const displayTags = template.tags ? template.tags.slice(0, 3) : [];
 
     return (
-        <div className="template-card">
+        <div
+            className="template-card"
+            onClick={handleSelect}
+            style={{ cursor: 'pointer' }}
+        >
             {/* Preview */}
             <div className="template-preview">
                 {template.thumbnail_html ? (
@@ -65,6 +69,7 @@ export default function TemplateCard({ template, onSelect }) {
                         title="Template preview"
                         sandbox="allow-same-origin"
                         className="template-iframe"
+                        style={{ pointerEvents: 'none' }}
                     />
                 ) : (
                     <div className="template-placeholder">
