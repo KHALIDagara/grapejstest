@@ -20,6 +20,10 @@ export default function Home() {
     // We keep this to switch between pages quickly, but we sync to DB.
     const [pagesStore, setPagesStore] = useState({});
 
+    // Track when we should reload project data (not just on GrapesJS page switches)
+    const shouldReloadProjectRef = useRef(true); // True on initial load
+    const lastLoadedPageIdRef = useRef(null);
+
     const { isThinking, generateResponse } = useAI();
     // const supabase = createClient(); // REMOVED: Using Server Actions now.
 
@@ -123,8 +127,16 @@ export default function Home() {
     };
 
     // --- 4.5 Handle Template Selection ---
-    const handleSelectTemplate = (template) => {
+    const handleSelectTemplate = async (template) => {
+        console.log('[Template] ========== TEMPLATE SELECTION STARTED ==========');
         console.log('[Template] User selected template:', template.name);
+        console.log('[Template] Template data:', {
+            hasContent: !!template.content,
+            contentKeys: template.content ? Object.keys(template.content) : [],
+            hasTheme: !!template.theme,
+            hasHtml: !!template.html,
+            hasCss: !!template.css
+        });
 
         // Generate new page ID
         const newPageId = 'page-' + Math.random().toString(36).substr(2, 9);
@@ -151,16 +163,33 @@ export default function Home() {
             hasTheme: !!newPage.theme
         });
 
-        // Add to store
-        setPagesStore(prev => ({
-            ...prev,
-            [newPageId]: newPage
-        }));
+        // Add to store FIRST
+        setPagesStore(prev => {
+            const updated = {
+                ...prev,
+                [newPageId]: newPage
+            };
+            console.log('[Template] Updated pagesStore. Total pages:', Object.keys(updated).length);
+            return updated;
+        });
+
+        // CRITICAL: Save immediately to database so it persists
+        console.log('[Template] Saving new page to database immediately...');
+        try {
+            await supabaseService.savePage(newPageId, newPage);
+            console.log('[Template] Page saved to database successfully');
+        } catch (error) {
+            console.error('[Template] Error saving page:', error);
+        }
+
+        // Set flag to reload project data (since this is a NEW database page)
+        shouldReloadProjectRef.current = true;
 
         // Switch to new page (will trigger editor load via useEffect)
+        console.log('[Template] Switching to new page:', newPageId);
         setCurrentPage({ name: newPage.name, id: newPageId });
 
-        console.log('[Template] Template loaded. Page will be saved on manual save or auto-save.');
+        console.log('[Template] ========== TEMPLATE SELECTION COMPLETE ==========');
     };
 
     // --- EFFECT: Sync Editor Content ---
@@ -169,26 +198,41 @@ export default function Home() {
             isEditorReady,
             hasEditor: !!editorRef.current,
             currentPageId: currentPage?.id,
-            hasPageData: !!pagesStore[currentPage?.id]
+            hasPageData: !!pagesStore[currentPage?.id],
+            shouldReloadProject: shouldReloadProjectRef.current,
+            lastLoadedPageId: lastLoadedPageIdRef.current
         });
 
         if (isEditorReady && editorRef.current && currentPage) {
             const pageData = pagesStore[currentPage.id];
-            console.log('[Sync] Page data:', {
-                pageId: currentPage.id,
-                hasContent: !!pageData?.content,
-                contentKeys: pageData?.content ? Object.keys(pageData.content) : [],
-            });
 
-            if (pageData && pageData.content) {
-                if (editorRef.current.loadProjectData) {
-                    console.log(`[Sync] Loading content for page ${currentPage.id}`);
-                    editorRef.current.loadProjectData(pageData.content);
+            // Only reload project if:
+            // 1. It's a different database page than last loaded, OR
+            // 2. shouldReloadProject flag is set (e.g., template selection)
+            const isDifferentDatabasePage = lastLoadedPageIdRef.current !== currentPage.id;
+
+            if (isDifferentDatabasePage && shouldReloadProjectRef.current) {
+                console.log('[Sync] Page data:', {
+                    pageId: currentPage.id,
+                    hasContent: !!pageData?.content,
+                    contentKeys: pageData?.content ? Object.keys(pageData.content) : [],
+                });
+
+                if (pageData && pageData.content) {
+                    if (editorRef.current.loadProjectData) {
+                        console.log(`[Sync] Loading content for DATABASE page ${currentPage.id}`);
+                        editorRef.current.loadProjectData(pageData.content);
+                        lastLoadedPageIdRef.current = currentPage.id;
+                        shouldReloadProjectRef.current = false; // Reset flag
+                    } else {
+                        console.warn('[Sync] loadProjectData method not available');
+                    }
                 } else {
-                    console.warn('[Sync] loadProjectData method not available');
+                    console.warn('[Sync] No content to load for page', currentPage.id);
+                    lastLoadedPageIdRef.current = currentPage.id;
                 }
             } else {
-                console.warn('[Sync] No content to load for page', currentPage.id);
+                console.log('[Sync] Skipping project reload (GrapesJS internal page switch)');
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
