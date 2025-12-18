@@ -1,72 +1,40 @@
-# syntax=docker/dockerfile:1
-# check=error=true
+FROM node:20-alpine
 
-# This Dockerfile is designed for production, not development. Use with Kamal or build'n'run by hand:
-# docker build -t grapesjs_rails .
-# docker run -d -p 80:80 -e RAILS_MASTER_KEY=<value from config/master.key> --name grapesjs_rails grapesjs_rails
+# 1. Setup
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# For a containerized dev environment, see Dev Containers: https://guides.rubyonrails.org/getting_started_with_devcontainer.html
+# 2. Dependencies
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install
 
-# Make sure RUBY_VERSION matches the Ruby version in .ruby-version
-ARG RUBY_VERSION=3.3.6
-FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
-
-# Rails app lives here
-WORKDIR /rails
-
-# Install base packages
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y curl libjemalloc2 libvips sqlite3 && \
-    rm -rf /var/lib/apt/lists /var/cache/apt/archives
-
-# Set production environment
-ENV RAILS_ENV="production" \
-    BUNDLE_DEPLOYMENT="1" \
-    BUNDLE_PATH="/usr/local/bundle" \
-    BUNDLE_WITHOUT="development"
-
-# Throw-away build stage to reduce size of final image
-FROM base AS build
-
-# Install packages needed to build gems
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y build-essential git pkg-config && \
-    rm -rf /var/lib/apt/lists /var/cache/apt/archives
-
-# Install application gems
-COPY Gemfile Gemfile.lock ./
-RUN bundle install && \
-    rm -rf ~/.bundle/ "${BUNDLE_PATH}"/ruby/*/cache "${BUNDLE_PATH}"/ruby/*/bundler/gems/*/.git && \
-    bundle exec bootsnap precompile --gemfile
-
-# Copy application code
+# 3. Copy Source Code
 COPY . .
 
-# Precompile bootsnap code for faster boot times
-RUN bundle exec bootsnap precompile app/ lib/
+# --- CRITICAL FIX START ---
+# We tell Docker to accept these arguments during the build
+ARG NEXT_PUBLIC_OPENROUTER_API_KEY
+ARG NEXT_PUBLIC_SITE_URL
+ARG NEXT_PUBLIC_AI_MODEL
+ARG NEXT_PUBLIC_GRAPESJS_LICENSE_KEY
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ARG OPENROUTER_API_KEY
 
-# Precompiling assets for production without requiring secret RAILS_MASTER_KEY
-RUN SECRET_KEY_BASE_DUMMY=1 ./bin/rails assets:precompile
+# We write them to a .env.production file inside the container before building
+# This ensures Next.js "sees" them during the build process
+RUN echo "NEXT_PUBLIC_OPENROUTER_API_KEY=$NEXT_PUBLIC_OPENROUTER_API_KEY" >> .env.production
+RUN echo "NEXT_PUBLIC_SUPABASE_URL=$SUPABASE_URL" >> .env.production
+RUN echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" >> .env.production
+RUN echo "NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL" >> .env.production
+RUN echo "NEXT_PUBLIC_AI_MODEL=$NEXT_PUBLIC_AI_MODEL" >> .env.production
+RUN echo "NEXT_PUBLIC_GRAPESJS_LICENSE_KEY=$NEXT_PUBLIC_GRAPESJS_LICENSE_KEY" >> .env.production
+RUN echo "OPENROUTER_API_KEY=$OPENROUTER_API_KEY" >> .env.production
+# --- CRITICAL FIX END ---
 
+# 4. Build
+RUN pnpm run build
 
-
-
-# Final stage for app image
-FROM base
-
-# Copy built artifacts: gems, application
-COPY --from=build "${BUNDLE_PATH}" "${BUNDLE_PATH}"
-COPY --from=build /rails /rails
-
-# Run and own only the runtime files as a non-root user for security
-RUN groupadd --system --gid 1000 rails && \
-    useradd rails --uid 1000 --gid 1000 --create-home --shell /bin/bash && \
-    chown -R rails:rails db log storage tmp
-USER 1000:1000
-
-# Entrypoint prepares the database.
-ENTRYPOINT ["/rails/bin/docker-entrypoint"]
-
-# Start server via Thruster by default, this can be overwritten at runtime
-EXPOSE 80
-CMD ["./bin/thrust", "./bin/rails", "server"]
+# 5. Run
+EXPOSE 3000
+CMD ["pnpm", "start"]
