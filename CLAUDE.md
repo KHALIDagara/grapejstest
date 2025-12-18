@@ -4,248 +4,269 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Next.js application combining GrapesJS Studio SDK with AI-powered design generation and Supabase authentication. Users can describe layouts in a chat interface, and an AI model (via OpenRouter) generates HTML through tool calls that manipulate the GrapesJS editor in real-time. Features multi-page projects with persistent storage.
+A Ruby on Rails application combining GrapesJS editor with AI-powered design generation. Users can create and edit pages using the GrapesJS visual editor, with an AI assistant that can modify components based on natural language instructions. Features page management, theme customization, and persistent storage with SQLite.
 
 ## Development Commands
 
 **Start development server:**
 ```bash
-npm run dev
+bin/rails server
 # or
-pnpm dev
+bin/dev
 ```
 Runs on http://localhost:3000
 
-**Build for production:**
+**Run database migrations:**
 ```bash
-npm run build
+bin/rails db:migrate
 ```
 
-**Start production server:**
+**Reset database:**
 ```bash
-npm start
+bin/rails db:reset
+```
+
+**Rails console:**
+```bash
+bin/rails console
 ```
 
 **Run tests:**
 ```bash
-npm test
-```
-
-**Docker deployment:**
-```bash
-docker build -t grapesjs-ai-builder .
-docker run -p 3000:3000 grapesjs-ai-builder
+bin/rails test
 ```
 
 ## Architecture
 
-### Component Structure (Migrated from Single Page)
-The app has been refactored from a monolithic `app/page.js` into modular components:
+### Rails Conventions
+This project follows standard Rails conventions:
+- **MVC Architecture**: Models, Views, Controllers separation
+- **RESTful Routes**: Standard resource-based routing
+- **Stimulus/Hotwire**: Minimal JavaScript with Stimulus controllers
+- **DRY Principle**: Shared logic in concerns and helpers
 
-- **`app/page.js`**: Main client component orchestrating Editor + Sidebar
-- **`components/Editor.js`**: GrapesJS editor initialization and lifecycle management
-- **`components/Sidebar.js`**: Chat UI, page switcher, theme editor
-- **`hooks/useAI.js`**: AI integration logic (tool execution, streaming)
-- **`services/`**: Backend service abstractions
-- **`utils/`**: Supabase clients and AI tool definitions
+### Models
 
-### Authentication Flow
-- Supabase Auth with email/password
-- Login page at `/login` (app/login/page.js)
-- Server Actions in `app/actions.js` handle auth operations
-- Middleware (`middleware.js`) uses `utils/supabase/middleware.js` to refresh sessions
-- Protected routes redirect to `/login` if unauthenticated
-- Auth callback handler at `app/auth/callback/route.js` for OAuth flows
+**User** (`app/models/user.rb`):
+- Authentication via `has_secure_password` (bcrypt)
+- Has many pages (dependent destroy)
+- Email validation and normalization
 
-### State Management Pattern
-**Page Store (In-Memory Cache + Database Sync):**
-- `pagesStore`: Dictionary of `{pageId: {messages, theme, content, name}}`
-- `currentPage`: Active page `{id, name}`
-- Debounced auto-save to Supabase (3s delay)
-- Loads all user pages on mount, creates default if empty
+**Page** (`app/models/page.rb`):
+- Belongs to user
+- Stores GrapesJS content as JSON
+- Theme settings (primaryColor, secondaryColor, fontFamily, borderRadius)
+- Chat messages history as JSON array
+- HTML/CSS extracted on save
 
-**Editor State:**
-- `editorRef`: GrapesJS instance (persists across renders)
-- `isEditorReady`: Initialization flag
-- `selectedElement`: Currently selected component for context-aware AI
+### Controllers
 
-**Theme System:**
-Each page has a theme object: `{primaryColor, secondaryColor, fontFamily, borderRadius}`
-AI uses theme for consistent styling when generating components.
+**ApplicationController** (`app/controllers/application_controller.rb`):
+- `current_user` helper method
+- `authenticate_user!` before action
+- Session-based authentication
+
+**SessionsController** (`app/controllers/sessions_controller.rb`):
+- Login/logout functionality
+- Session management
+
+**RegistrationsController** (`app/controllers/registrations_controller.rb`):
+- User signup
+
+**PagesController** (`app/controllers/pages_controller.rb`):
+- CRUD operations for pages
+- `store` action: GrapesJS remote storage save endpoint
+- `load` action: GrapesJS remote storage load endpoint
+- JSON and Turbo Stream responses
+
+**AiController** (`app/controllers/ai_controller.rb`):
+- `chat` action: Processes AI requests via OpenRouter
+- Builds context from page attributes and selected element
+- Returns tool calls for GrapesJS manipulation
+
+### Views
+
+**Layouts** (`app/views/layouts/application.html.erb`):
+- Tailwind CSS styling
+- Flash message display
+- Stimulus/Turbo integration
+
+**Pages** (`app/views/pages/`):
+- `index.html.erb` / `show.html.erb`: Main editor view with GrapesJS
+- Sidebar with tabs: Chat, Pages, Theme
+
+**Sessions/Registrations**:
+- Login and signup forms
+
+### Stimulus Controllers
+
+**editor_controller.js**:
+- Initializes GrapesJS with remote storage
+- Handles page CRUD operations
+- Executes AI tool calls on editor
+- Theme management
+
+**chat_controller.js**:
+- Sends messages to AI endpoint
+- Displays chat history
+- Executes tool calls from AI responses
+- Tracks selected element context
+
+**sidebar_controller.js**:
+- Tab switching logic
+
+**flash_controller.js**:
+- Auto-dismiss flash messages
 
 ### GrapesJS Integration
-- Loaded via CDN (unpkg) with lazy polling for `window.GrapesJsStudioSDK`
-- Dark theme, web project type, self-hosted assets
-- Editor content updated via `editor.setComponents(html)`
-- Selection tracking via `editor.on('component:selected')`
-- Layer manager shows semantic names via `data-gjs-name` attribute
 
-### AI Integration Architecture
-
-**Tool-Based Editing (Not Text Generation):**
-The AI doesn't generate raw HTML in responses. Instead, it calls structured tools to manipulate the editor:
-
-**Available Tools** (`utils/aiTools.js`):
-1. `style_element`: Apply CSS to selected component (supports recursive for children)
-2. `update_inner_content`: Replace innerHTML (text changes, inner restructure)
-3. `append_component`: Add new child component
-4. `generate_whole_page`: Replace entire page (for "landing page" requests)
-5. `delete_component`: Remove selected component
-6. `add_class`: Add CSS class
-7. `insert_sibling_before`/`after`: Add sibling components
-8. `search_image`: Unsplash integration (searches AND applies in one call)
-
-**AI Request Flow:**
-1. User sends message via Sidebar
-2. Client calls `generateResponse()` in `useAI.js`
-3. System prompt includes:
-   - Selected element context (HTML, classes, ID)
-   - Page theme (colors, fonts)
-   - Simplified DOM tree (3 levels deep)
-   - Tool selection rules
-4. Request sent to `/api/chat` (proxies to OpenRouter)
-5. AI responds with tool calls (e.g., `{name: "style_element", arguments: {...}}`)
-6. `executeTool()` executes tool on live GrapesJS editor
-7. Result displayed in chat ("Styles updated.")
-
-**Context Management:**
-- `history`: Full conversation array (`[{role, content}]`)
-- System prompt regenerated per request with fresh editor state
-- Tool choice: "required" (forces AI to call a tool, never freeform text)
-
-### API Routes
-
-**`/api/chat`** (POST):
-- Proxies requests to OpenRouter
-- Accepts: `{messages, model, tools, tool_choice}`
-- Returns: OpenRouter response with tool calls
-- Server-side API key (`OPENROUTER_API_KEY`)
-- Max duration: 30s
-
-**`/api/unsplash/search`** (POST):
-- Searches Unsplash for images
-- Parameters: `{query, color?, orientation?, perPage?, page?, random?}`
-- Returns: `{image: {url, alt, photographer}}` or `{results: [...]}`
-- Requires `UNSPLASH_ACCESS_KEY` env var
-
-### Database Schema (Supabase)
-
-**`pages` table:**
-```sql
-id: text (primary key, client-generated)
-user_id: uuid (foreign key to auth.users)
-name: text
-content: jsonb (GrapesJS components)
-html: text (rendered output)
-css: text (rendered styles)
-theme: jsonb {primaryColor, secondaryColor, fontFamily, borderRadius}
-messages: jsonb (chat history array)
-created_at, updated_at: timestamp
+**Remote Storage Configuration:**
+```javascript
+storageManager: {
+  type: 'remote',
+  options: {
+    remote: {
+      urlStore: '/pages/:id/store',
+      urlLoad: '/pages/:id/load',
+      headers: { 'X-CSRF-Token': csrfToken }
+    }
+  }
+}
 ```
 
-**Row Level Security:** Users can only access their own pages.
+**Key GrapesJS API Methods Used:**
+- `editor.getHtml()` / `editor.getCss()`: Extract rendered output
+- `editor.getProjectData()` / `editor.loadProjectData()`: Full project serialization
+- `editor.getSelected()`: Currently selected component
+- `editor.setComponents()` / `editor.setStyle()`: Replace content
+- `component.addStyle()`: Apply CSS styles
+- `component.append()`: Add child components
+- `editor.Pages.getAll()`: Multi-page support
 
-**`profiles` table:**
-Auto-created on signup via trigger (`handle_new_user()`).
+### AI Tool System
 
-### Server Actions Pattern
-All Supabase operations go through Next.js Server Actions (not direct client calls):
+The AI assistant uses function calling to manipulate the editor:
 
-**`app/actions.js`** exports:
-- `loginAction(formData)` / `signupAction(formData)`
-- `savePageAction(pageId, pageData)`
-- `loadPageAction(pageId)`
-- `getUserPagesAction()`
-- `getUserAction()`
+1. **style_element**: Apply CSS styles to selected component
+2. **update_inner_content**: Replace innerHTML
+3. **append_component**: Add child element
+4. **generate_whole_page**: Replace entire page
+5. **delete_component**: Remove element
+6. **add_class**: Add CSS class
+7. **insert_sibling_before/after**: Add sibling elements
 
-**`services/supabaseService.js`** wraps these for cleaner imports:
-```js
-supabaseService.savePage(pageId, data)
-supabaseService.getUserPages()
-supabaseService.loadPage(pageId)
-supabaseService.getUser()
+### Database Schema (SQLite)
+
+```ruby
+# Users
+create_table :users do |t|
+  t.string :email, null: false
+  t.string :password_digest, null: false
+  t.timestamps
+end
+add_index :users, :email, unique: true
+
+# Pages
+create_table :pages do |t|
+  t.references :user, null: false, foreign_key: true
+  t.string :name, null: false, default: "Untitled Page"
+  t.json :content, default: {}
+  t.text :html
+  t.text :css
+  t.json :theme, default: {}
+  t.json :messages, default: []
+  t.timestamps
+end
+add_index :pages, [:user_id, :updated_at]
 ```
-
-This proxying solves Mixed Content issues (HTTP Supabase on HTTPS Next.js).
 
 ## Environment Variables
 
-Required in `.env.local`:
-```bash
-# Database (not actively used, leftover from Prisma scaffolding)
-DATABASE_URL="postgresql://..."
+Create a `.env` file or set in production:
 
-# OpenRouter AI (server-side only)
+```bash
+# AI API (required for chat)
 OPENROUTER_API_KEY="sk-..."
+AI_MODEL="google/gemini-2.0-flash-exp:free"
 
 # Application
-NEXT_PUBLIC_SITE_URL="http://localhost:3000"
-NEXT_PUBLIC_AI_MODEL="google/gemini-2.0-flash-exp:free"
-NEXT_PUBLIC_GRAPESJS_LICENSE_KEY="your-license-key"
-
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
-NEXT_PUBLIC_SUPABASE_ANON_KEY="eyJ..."
+SITE_URL="http://localhost:3000"
+SECRET_KEY_BASE="your-secret-key"
 ```
 
-**Unsplash (optional, for image search):**
-```bash
-UNSPLASH_ACCESS_KEY="your-access-key"
+## Routes
+
+```ruby
+# Authentication
+get/post "login"   -> sessions#new/create
+delete "logout"    -> sessions#destroy
+get/post "signup"  -> registrations#new/create
+
+# Pages
+resources :pages do
+  member do
+    post :store    # GrapesJS save
+    get :load      # GrapesJS load
+  end
+  post "ai/chat"   # AI endpoint
+end
+
+root "pages#index"
 ```
-
-## Code Organization Principles
-
-- **Minimal, clean structure**: Single responsibility per file
-- **Client vs Server boundaries**: Auth/DB via Server Actions, AI/GrapesJS client-side
-- **No over-abstraction**: Direct calls, no unnecessary layers
-- **Inline styles**: Component-scoped `<style jsx>`
-- **Tool-based AI**: AI calls functions, doesn't generate raw HTML strings
-- **Semantic naming**: `data-gjs-name` on components for layer visibility
 
 ## Key Implementation Details
 
-### Debounced Auto-Save
-`savePageData()` in `app/page.js` debounces saves with a 3s timeout. Saves messages, theme, content, and rendered HTML/CSS.
+### Page Context for AI
+When the AI receives a request, it gets:
+- Page ID, name, theme settings
+- Currently selected element (tagName, id, classes, HTML preview)
+- Simplified DOM tree (3 levels deep)
+- Conversation history (last 10 messages)
 
-### Editor Content Extraction
-```js
-editor.getHtml() // Clean HTML
-editor.getCss()  // Compiled CSS
-editor.getProjectData() // Full component tree (saved to content field)
-```
+### Theme System
+Each page has customizable theme values:
+- `primaryColor`: Main accent color
+- `secondaryColor`: Secondary/background color
+- `fontFamily`: Typography
+- `borderRadius`: Corner rounding
 
-### Image Search Integration
-`search_image` tool calls `/api/unsplash/search` with `random: true`, applies result based on `apply_as` parameter:
-- `background`: Sets CSS background-image
-- `img_append`: Appends `<img>` as child
-- `img_replace`: Replaces component content with `<img>`
+AI is instructed to use these values for consistency.
 
-### Theme Application
-When AI creates new components, system prompt instructs it to use `theme.primaryColor`, `theme.secondaryColor`, etc. for consistency. Theme editor in Sidebar updates `pagesStore[pageId].theme`.
+### Storage Flow
+1. GrapesJS autosaves after N changes
+2. `store` action receives full project data + extracted HTML/CSS
+3. Data saved to `pages.content` (JSON), `pages.html`, `pages.css`
+4. On load, `load` action returns `pages.content`
 
-### Security
-- DOMPurify sanitizes all HTML before injecting into GrapesJS
-- RLS policies on Supabase tables
-- API keys server-side only (except Supabase anon key)
-- CORS headers via OpenRouter's HTTP-Referer
+### Authentication Flow
+1. User visits any page
+2. `authenticate_user!` checks session
+3. Redirects to `/login` if not authenticated
+4. After login, session[:user_id] set
+5. `current_user` loads User from session
 
-## Testing
-Jest configured with React Testing Library. Tests in `__tests__/` directory.
+## Code Organization Principles
+
+- **Follow Rails conventions**: RESTful routes, MVC structure
+- **Minimize JavaScript**: Use Stimulus only when necessary
+- **Use GrapesJS API**: Leverage built-in functionality
+- **DRY**: Extract shared logic to concerns/helpers
+- **Separation of concerns**: Keep controllers thin, models handle business logic
 
 ## Common Patterns
 
 **Adding a new AI tool:**
-1. Define in `utils/aiTools.js` (OpenAI function schema)
-2. Implement case in `hooks/useAI.js` → `executeTool()`
-3. Update system prompt examples if needed
+1. Add tool definition in `AiController#ai_tools`
+2. Add execution case in `editor_controller.js#executeToolCall`
+3. Update system prompt if needed
 
-**Adding a Server Action:**
-1. Export async function in `app/actions.js` with `'use server'`
-2. Wrap in `services/supabaseService.js` if frequently used
-3. Call from client components
+**Adding page attributes:**
+1. Add migration for new column
+2. Update `Page#attributes_for_context`
+3. Update AI system prompt to use attribute
+4. Add UI control in theme tab if needed
 
-**Modifying page data structure:**
-Update schema in:
-- Supabase table definition
-- `savePageAction()` upsert payload
-- Initial state in `app/page.js` → `init()`
+**Modifying storage behavior:**
+1. Update `PagesController#store` for save logic
+2. Update `PagesController#load` for load logic
+3. Modify `editor_controller.js` storage config if needed
